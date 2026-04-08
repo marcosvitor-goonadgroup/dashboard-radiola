@@ -252,13 +252,6 @@ const CampaignList = ({
     setExpandedCampaigns(newExpanded);
   };
 
-  const handleClientSelect = (clientName: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onSelectClient) {
-      onSelectClient(selectedClient === clientName ? null : clientName);
-    }
-  };
-
   const totalCampaigns = clientsData.reduce((sum, client) => sum + client.campanhas.length, 0);
 
   return (

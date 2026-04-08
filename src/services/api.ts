@@ -35,14 +35,6 @@ const parsePercentage = (value: string): number => {
   return parseFloat(cleaned) || 0;
 };
 
-const parseDate = (dateString: string): Date => {
-  try {
-    return parse(dateString, 'dd/MM/yyyy', new Date());
-  } catch {
-    return new Date();
-  }
-};
-
 const parseSearchDate = (dateString: string): Date => {
   try {
     // Format from API: "2025-04-08"

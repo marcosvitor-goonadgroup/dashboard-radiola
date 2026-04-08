@@ -235,18 +235,21 @@ const ImpressionsChart = ({
     return `${value.toFixed(1)}%`;
   };
 
-  const formatTooltip = (value: number | undefined, name: string | undefined) => {
+  const formatTooltip = (value: unknown, name: unknown): string => {
     if (value === undefined || name === undefined) return '';
 
+    const numValue = value as number;
+    const strName = name as string;
+
     // Extrai o nome da métrica removendo o sufixo "_anterior" se existir
-    const metricName = name.replace(' (Período Anterior)', '');
+    const metricName = strName.replace(' (Período Anterior)', '');
     const metric = metricOptions.find(m => m.label === metricName);
 
     if (metric?.type === 'percentage') {
-      return `${value.toFixed(2)}%`;
+      return `${numValue.toFixed(2)}%`;
     }
 
-    return new Intl.NumberFormat('pt-BR').format(value);
+    return new Intl.NumberFormat('pt-BR').format(numValue);
   };
 
   const chartTitle = selectedMetrics.length === 1
@@ -346,7 +349,7 @@ const ImpressionsChart = ({
 
       <div className="flex-1 min-h-[320px]">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData}>
+          <ComposedChart data={chartData as never[]}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="date"
