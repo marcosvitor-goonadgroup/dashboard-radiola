@@ -6,6 +6,11 @@ const CAMPAIGN_API_URLS = [
   'https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Meta'
 ];
 
+// APIs com formato "Consolidado" (colunas e data diferentes)
+const CONSOLIDADO_API_URLS = [
+  'https://nmbcoamazonia-api.vercel.app/google/sheets/1AIWnkmXFM-EKw5R6GlLnMTEDCUeg-XxpYOjZ69GFadY/data?range=Consolidado'
+];
+
 const SEARCH_API_URLS = [
   'https://nmbcoamazonia-api.vercel.app/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Search',
   'https://nmbcoamazonia-api.vercel.app/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Search'
@@ -53,13 +58,71 @@ const normalizeVeiculo = (veiculo: string): string => {
   return normalized;
 };
 
+const parseConsolidadoDate = (dateString: string): Date => {
+  try {
+    // Formato da planilha Consolidado: "DD/MM/YYYY"
+    return parse(dateString, 'dd/MM/yyyy', new Date());
+  } catch {
+    return new Date();
+  }
+};
+
+const parseConsolidadoRows = (rows: string[][]): ProcessedCampaignData[] => {
+  const data: ProcessedCampaignData[] = [];
+  rows.forEach(row => {
+    if (row.length < 22) return;
+    const numeroPi = row[22] || '';
+    if (numeroPi === '#VALUE!') return;
+
+    const veiculoRaw = row[21] || '';
+    const veiculo = normalizeVeiculo(veiculoRaw);
+
+    data.push({
+      date: parseConsolidadoDate(row[2]),
+      campaignName: row[4] || '',
+      adSetName: row[6] || '',
+      adName: row[8] || '',
+      cost: parseCurrency(row[24]),
+      impressions: parseNumber(row[12]),
+      reach: 0,
+      clicks: parseNumber(row[13]),
+      videoViews: parseNumber(row[14]),
+      videoViews25: parseNumber(row[15]),
+      videoViews50: parseNumber(row[16]),
+      videoViews75: parseNumber(row[17]),
+      videoCompletions: parseNumber(row[18]),
+      totalEngagements: 0,
+      veiculo,
+      tipoDeCompra: row[23] || '',
+      videoEstaticoAudio: '',
+      image: '',
+      campanha: row[26] || '',
+      numeroPi,
+      cliente: row[27] || '',
+      agencia: row[20] || ''
+    });
+  });
+  return data;
+};
+
 export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
   try {
-    const responses = await Promise.all(
-      CAMPAIGN_API_URLS.map(url => axios.get<ApiResponse>(url))
-    );
+    const [metaResponses, consolidadoResponses] = await Promise.all([
+      Promise.all(CAMPAIGN_API_URLS.map(url => axios.get<ApiResponse>(url))),
+      Promise.all(CONSOLIDADO_API_URLS.map(url => axios.get<ApiResponse>(url)))
+    ]);
 
     const allData: ProcessedCampaignData[] = [];
+
+    // Parser para planilhas Consolidado
+    consolidadoResponses.forEach(response => {
+      if (response.data.success && response.data.data.values.length > 1) {
+        const rows = response.data.data.values.slice(1);
+        allData.push(...parseConsolidadoRows(rows));
+      }
+    });
+
+    const responses = metaResponses;
 
     responses.forEach(response => {
       if (response.data.success && response.data.data.values.length > 1) {

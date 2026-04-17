@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ProcessedCampaignData } from '../types/campaign';
 import { BenchmarkData } from '../services/benchmarkService';
 import BenchmarkIndicator from './BenchmarkIndicator';
+import { getFallbackImageUrl } from '../services/creativeImageService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -84,8 +85,8 @@ const CreativeDetailModal = ({ creativeName, data, benchmark, onClose }: Creativ
 
     const firstItem = creativeData[0];
 
-    // Busca a primeira URL de imagem não vazia
-    const imageUrl = creativeData.find(item => item.image)?.image || '';
+    // Busca a primeira URL de imagem não vazia, com fallback estático
+    const imageUrl = creativeData.find(item => item.image)?.image || getFallbackImageUrl(creativeName) || '';
 
     return {
       ...aggregated,

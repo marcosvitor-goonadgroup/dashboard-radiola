@@ -4,12 +4,14 @@ import { subDays } from 'date-fns';
 import logoSenai from '../images/Logo-SENAI.png';
 import logoSesi from '../images/sesi_logo.jpg';
 import logoSebrae from '../images/logo_sebrae.png';
+import logoParkshopping from '../images/logo_parkshopping.webp';
 
 // Mapeamento de logos por cliente
 const clientLogos: Record<string, string> = {
   'SENAI': logoSenai,
   'SESI': logoSesi,
-  'SEBRAE': logoSebrae
+  'SEBRAE': logoSebrae,
+  'PARKSHOPPING': logoParkshopping
 };
 
 interface CampaignListProps {
@@ -308,9 +310,9 @@ const CampaignList = ({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       {/* Logo do cliente ou ícone padrão */}
-                      {clientLogos[client.nome] ? (
+                      {clientLogos[client.nome.toUpperCase()] ? (
                         <img
-                          src={clientLogos[client.nome]}
+                          src={clientLogos[client.nome.toUpperCase()]}
                           alt={client.nome}
                           className="h-8 w-28 object-contain object-left"
                         />

@@ -4,6 +4,7 @@ import BenchmarkIndicator from './BenchmarkIndicator';
 import CreativeImage from './CreativeImage';
 import CreativeDetailModal from './CreativeDetailModal';
 import { fetchAllBenchmarks, BenchmarkData } from '../services/benchmarkService';
+import { getFallbackImageUrl } from '../services/creativeImageService';
 
 interface CreativePerformanceProps {
   data: ProcessedCampaignData[];
@@ -165,7 +166,7 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
           veiculo: item.veiculo,
           tipoDeCompra: item.tipoDeCompra,
           tipoMidia: item.tipoMidia,
-          imageUrl: item.imageUrl,
+          imageUrl: item.imageUrl || getFallbackImageUrl(item.name) || '',
           impressoes: item.impressoes,
           cliques: item.cliques,
           views: item.views,

@@ -5,6 +5,35 @@
 const API_BASE = 'https://nmbcoamazonia-api.vercel.app';
 const BRB_FOLDER_ID = '1ge94s1Dcm5sBUjGUvvQj6kEXH6zjiwIV';
 
+/**
+ * Mapeamento estático de fallback: padrão de nome (substring) → URL da imagem
+ * Usado quando a planilha não possui URL de imagem preenchida para o criativo.
+ */
+const STATIC_IMAGE_FALLBACKS: Array<{ pattern: string; url: string }> = [
+  {
+    pattern: 'vidaplenalibbs',
+    url: 'https://avidaplena.com.br/wp-content/uploads/2024/12/libbsfarmaceutica_vidaplenalibbs_image_540.webp'
+  },
+  {
+    pattern: 'libbsfarmaceutica',
+    url: 'https://avidaplena.com.br/wp-content/uploads/2024/12/libbsfarmaceutica_vidaplenalibbs_image_540.webp'
+  }
+];
+
+/**
+ * Retorna URL de fallback estático para um criativo pelo nome.
+ * Procura por correspondência de substring (case-insensitive).
+ */
+export const getFallbackImageUrl = (creativeName: string): string | null => {
+  const lowerName = creativeName.toLowerCase();
+  for (const entry of STATIC_IMAGE_FALLBACKS) {
+    if (lowerName.includes(entry.pattern.toLowerCase())) {
+      return entry.url;
+    }
+  }
+  return null;
+};
+
 interface DriveFile {
   id: string;
   name: string;
