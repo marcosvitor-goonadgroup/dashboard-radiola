@@ -1,6 +1,7 @@
 import { CampaignSummary, ProcessedCampaignData, Filters, CampaignMetrics } from '../types/campaign';
 import { useMemo, useState } from 'react';
 import { subDays } from 'date-fns';
+import { toSlug } from '../utils/slug';
 import logoSenai from '../images/Logo-SENAI.png';
 import logoSesi from '../images/sesi_logo.jpg';
 import logoSebrae from '../images/logo_sebrae.png';
@@ -417,6 +418,19 @@ const CampaignList = ({
                                 <span>{formatNumber(campaign.metrics.cliques)} cliques</span>
                               </div>
                             </div>
+                            <a
+                              href={`/${toSlug(client.nome)}/${toSlug(campaign.nome)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              title={`Ver dashboard de ${campaign.nome}`}
+                              className="flex items-center justify-center w-7 h-7 rounded-xl bg-gray-100 hover:bg-[#153ece] text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </a>
                             <svg
                               className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${
                                 expandedCampaigns.has(campaign.nome) ? 'rotate-180' : ''

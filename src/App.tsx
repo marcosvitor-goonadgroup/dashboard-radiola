@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { CampaignProvider, useCampaign } from './contexts/CampaignContext';
 import ClientDashboard from './pages/ClientDashboard';
+import CampaignDashboard from './pages/CampaignDashboard';
+import PIDashboard from './pages/PIDashboard';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import BigNumbers from './components/BigNumbers';
@@ -431,11 +433,25 @@ const DashboardContent = () => {
 };
 
 function App() {
-  // Roteamento simples por pathname: /sebrae → dashboard do cliente SEBRAE
-  const pathname = window.location.pathname;
-  const clientSlug = pathname.replace(/^\//, '').split('/')[0];
+  const parts = window.location.pathname
+    .replace(/^\//, '')
+    .split('/')
+    .filter(Boolean)
+    .map(decodeURIComponent);
 
-  if (clientSlug && clientSlug !== '') {
+  const clientSlug = parts[0] || '';
+  const campaignSlug = parts[1] || '';
+  const piSlug = parts[2] || '';
+
+  if (clientSlug && campaignSlug && piSlug) {
+    return <PIDashboard clientSlug={clientSlug} campaignSlug={campaignSlug} piSlug={piSlug} />;
+  }
+
+  if (clientSlug && campaignSlug) {
+    return <CampaignDashboard clientSlug={clientSlug} campaignSlug={campaignSlug} />;
+  }
+
+  if (clientSlug) {
     return <ClientDashboard slug={clientSlug} />;
   }
 

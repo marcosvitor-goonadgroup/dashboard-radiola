@@ -1,8 +1,12 @@
 import axios from 'axios';
 
+const API_BASE = import.meta.env.DEV
+  ? '/api-proxy'
+  : 'https://nmbcoamazonia-api.vercel.app';
+
 const BENCHMARK_APIS = [
-  'https://nmbcoamazonia-api.vercel.app/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Bench',
-  'https://nmbcoamazonia-api.vercel.app/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Bench'
+  `${API_BASE}/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Bench`,
+  `${API_BASE}/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Bench`
 ];
 
 export interface BenchmarkData {

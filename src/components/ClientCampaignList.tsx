@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ProcessedCampaignData } from '../types/campaign';
+import { toSlug } from '../utils/slug';
 
 interface ClientCampaignListProps {
   data: ProcessedCampaignData[];
@@ -14,6 +15,7 @@ const formatNumber = (n: number) => new Intl.NumberFormat('pt-BR').format(n);
 
 const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignListProps) => {
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
+  const clientSlug = useMemo(() => toSlug(data[0]?.cliente || ''), [data]);
 
   const campaigns = useMemo(() => {
     const map = new Map<string, { pis: Map<string, ProcessedCampaignData[]> }>();
@@ -28,11 +30,15 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
       camp.pis.get(pi)!.push(item);
     });
 
+    const maxDate = data.reduce((max, i) => i.date > max ? i.date : max, new Date(0));
+    const sevenDaysAgo = new Date(maxDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+
     return Array.from(map.entries()).map(([nome, { pis }]) => {
       const allItems = Array.from(pis.values()).flat();
       const impressoes = allItems.reduce((s, i) => s + i.impressions, 0);
       const cliques = allItems.reduce((s, i) => s + i.clicks, 0);
       const investimento = allItems.reduce((s, i) => s + i.cost, 0);
+      const isActive = allItems.some(i => i.date >= sevenDaysAgo && (i.impressions > 0 || i.clicks > 0) && i.cost > 0);
 
       const piList = Array.from(pis.entries()).map(([pi, items]) => ({
         pi,
@@ -42,8 +48,11 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
         veiculos: [...new Set(items.map(i => i.veiculo).filter(Boolean))],
       })).sort((a, b) => b.impressoes - a.impressoes);
 
-      return { nome, impressoes, cliques, investimento, pis: piList };
-    }).sort((a, b) => b.impressoes - a.impressoes);
+      return { nome, impressoes, cliques, investimento, pis: piList, isActive };
+    }).sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      return b.impressoes - a.impressoes;
+    });
   }, [data]);
 
   const toggle = (nome: string) => {
@@ -83,7 +92,23 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
-                <span className="text-sm font-medium text-gray-800 truncate">{camp.nome}</span>
+                <div className={`h-2 w-2 rounded-full shrink-0 ${camp.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                <span className={`text-sm font-medium truncate ${camp.isActive ? 'text-green-600' : 'text-gray-800'}`}>
+                  {camp.nome}
+                </span>
+                <a
+                  href={`/${clientSlug}/${toSlug(camp.nome)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  title={`Ver dashboard de ${camp.nome}`}
+                  className="flex items-center justify-center w-6 h-6 rounded-lg bg-gray-100 hover:bg-[#153ece] text-gray-400 hover:text-white transition-colors shrink-0"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </a>
               </div>
               <div className="flex items-center gap-4 shrink-0 ml-4">
                 <div className="text-right hidden sm:block">
@@ -129,6 +154,19 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
                           <span className="text-xs text-gray-500 truncate">
                             {pi.veiculos.join(' · ')}
                           </span>
+                          <a
+                            href={`/${clientSlug}/${toSlug(camp.nome)}/${pi.pi}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            title={`Ver dashboard do PI ${pi.pi}`}
+                            className="flex items-center justify-center w-6 h-6 rounded-lg bg-gray-100 hover:bg-[#153ece] text-gray-400 hover:text-white transition-colors shrink-0"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </a>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 shrink-0 ml-4">

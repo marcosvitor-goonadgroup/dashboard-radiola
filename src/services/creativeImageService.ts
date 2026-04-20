@@ -2,7 +2,9 @@
  * Serviço para buscar imagens de criativos do Google Drive
  */
 
-const API_BASE = 'https://nmbcoamazonia-api.vercel.app';
+const API_BASE = import.meta.env.DEV
+  ? '/api-proxy'
+  : 'https://nmbcoamazonia-api.vercel.app';
 const BRB_FOLDER_ID = '1ge94s1Dcm5sBUjGUvvQj6kEXH6zjiwIV';
 
 /**

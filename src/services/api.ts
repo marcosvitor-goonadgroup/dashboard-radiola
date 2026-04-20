@@ -2,23 +2,28 @@ import axios from 'axios';
 import { ApiResponse, ProcessedCampaignData, ProcessedSearchData, PricingTableRow } from '../types/campaign';
 import { parse } from 'date-fns';
 
+// Em dev usa proxy do Vite (evita CORS); em produção chama a API diretamente
+const API_BASE = import.meta.env.DEV
+  ? '/api-proxy'
+  : 'https://nmbcoamazonia-api.vercel.app';
+
 const CAMPAIGN_API_URLS = [
-  'https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Meta'
+  `${API_BASE}/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Meta`
 ];
 
 // APIs com formato "Consolidado" (colunas e data diferentes)
 const CONSOLIDADO_API_URLS = [
-  'https://nmbcoamazonia-api.vercel.app/google/sheets/1AIWnkmXFM-EKw5R6GlLnMTEDCUeg-XxpYOjZ69GFadY/data?range=Consolidado'
+  `${API_BASE}/google/sheets/1AIWnkmXFM-EKw5R6GlLnMTEDCUeg-XxpYOjZ69GFadY/data?range=Consolidado`
 ];
 
 const SEARCH_API_URLS = [
-  'https://nmbcoamazonia-api.vercel.app/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Search',
-  'https://nmbcoamazonia-api.vercel.app/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Search'
+  `${API_BASE}/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Search`,
+  `${API_BASE}/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Search`
 ];
 
-const PRICING_API_URL = 'https://nmbcoamazonia-api.vercel.app/google/sheets/1zgRBEs_qi_9DdYLqw-cEedD1u66FS88ku6zTZ0gV-oU/data?range=base';
+const PRICING_API_URL = `${API_BASE}/google/sheets/1zgRBEs_qi_9DdYLqw-cEedD1u66FS88ku6zTZ0gV-oU/data?range=base`;
 
-const PI_INFO_API_URL = 'https://nmbcoamazonia-api.vercel.app/google/sheets/1T35Pzw9ZA5NOTLHsTqMGZL5IEedpSGdZHJ2ElrqLs1M/data';
+const PI_INFO_API_URL = `${API_BASE}/google/sheets/1T35Pzw9ZA5NOTLHsTqMGZL5IEedpSGdZHJ2ElrqLs1M/data`;
 
 const parseNumber = (value: string): number => {
   if (!value || value === '') return 0;
