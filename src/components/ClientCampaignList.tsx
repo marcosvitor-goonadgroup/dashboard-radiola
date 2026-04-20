@@ -42,11 +42,16 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
 
       const piList = Array.from(pis.entries()).map(([pi, items]) => ({
         pi,
+        hasRealPI: pi !== '—',
         impressoes: items.reduce((s, i) => s + i.impressions, 0),
         cliques: items.reduce((s, i) => s + i.clicks, 0),
         investimento: items.reduce((s, i) => s + i.cost, 0),
         veiculos: [...new Set(items.map(i => i.veiculo).filter(Boolean))],
-      })).sort((a, b) => b.impressoes - a.impressoes);
+      })).sort((a, b) => {
+        // PIs reais primeiro, depois "—"
+        if (a.hasRealPI !== b.hasRealPI) return a.hasRealPI ? -1 : 1;
+        return b.impressoes - a.impressoes;
+      });
 
       return { nome, impressoes, cliques, investimento, pis: piList, isActive };
     }).sort((a, b) => {
@@ -131,6 +136,48 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
               <div className="bg-gray-50 border-t border-gray-100">
                 {camp.pis.map(pi => {
                   const isSelected = selectedPI === pi.pi;
+
+                  const piMetrics = (
+                    <div className="flex items-center gap-4 shrink-0 ml-4">
+                      <div className="text-right hidden sm:block">
+                        <p className="text-xs text-gray-400">Impressões</p>
+                        <p className="text-xs font-medium text-gray-600">{formatNumber(pi.impressoes)}</p>
+                      </div>
+                      <div className="text-right hidden sm:block">
+                        <p className="text-xs text-gray-400">Cliques</p>
+                        <p className="text-xs font-medium text-gray-600">{formatNumber(pi.cliques)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-400">Investimento</p>
+                        <p className="text-xs font-semibold text-[#153ece]">{formatCurrency(pi.investimento)}</p>
+                      </div>
+                    </div>
+                  );
+
+                  // Linha sem PI real — não clicável, sem ícone de olho
+                  if (!pi.hasRealPI) {
+                    return (
+                      <div
+                        key={pi.pi}
+                        className="w-full px-6 py-3 flex items-center justify-between border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-4 shrink-0" />
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold shrink-0 bg-gray-200 text-gray-500">
+                              Sem PI
+                            </span>
+                            <span className="text-xs text-gray-500 truncate">
+                              {pi.veiculos.join(' · ')}
+                            </span>
+                          </div>
+                        </div>
+                        {piMetrics}
+                      </div>
+                    );
+                  }
+
+                  // Linha com PI real — clicável com ícone de olho
                   return (
                     <button
                       key={pi.pi}
@@ -169,20 +216,7 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
                           </a>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 shrink-0 ml-4">
-                        <div className="text-right hidden sm:block">
-                          <p className="text-xs text-gray-400">Impressões</p>
-                          <p className="text-xs font-medium text-gray-600">{formatNumber(pi.impressoes)}</p>
-                        </div>
-                        <div className="text-right hidden sm:block">
-                          <p className="text-xs text-gray-400">Cliques</p>
-                          <p className="text-xs font-medium text-gray-600">{formatNumber(pi.cliques)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-gray-400">Investimento</p>
-                          <p className="text-xs font-semibold text-[#153ece]">{formatCurrency(pi.investimento)}</p>
-                        </div>
-                      </div>
+                      {piMetrics}
                     </button>
                   );
                 })}
