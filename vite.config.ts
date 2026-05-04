@@ -6,5 +6,12 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
+    proxy: {
+      '/api-proxy': {
+        target: 'https://nmbcoamazonia-api.vercel.app',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-proxy/, ''),
+      },
+    },
   },
 })

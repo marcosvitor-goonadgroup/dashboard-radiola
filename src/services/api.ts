@@ -132,14 +132,16 @@ export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
     responses.forEach(response => {
       if (response.data.success && response.data.data.values.length > 1) {
         const rows = response.data.data.values.slice(1);
-
         rows.forEach(row => {
           if (row.length >= 14) {
-            const numeroPi = row[26] || '';
+            // Planilhas com 33 colunas (ex: SEBRAE) têm layout estendido
+            const extended = row.length >= 33;
+            const numeroPi = extended ? (row[32] || '') : (row[26] || '');
+            const campanha  = extended ? (row[30] || '') : (row[30] || '');
+            const agencia   = extended ? (row[31] || '') : (row[31] || '');
             const veiculoRaw = row[25] || '';
             const veiculo = normalizeVeiculo(veiculoRaw);
             const cliente = row[27] || '';
-            const agencia = row[31] || '';
 
             // Ignora linhas onde o Número PI é "#VALUE!"
             if (numeroPi === '#VALUE!') {
@@ -165,7 +167,7 @@ export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
               tipoDeCompra: row[28] || '',
               videoEstaticoAudio: '',
               image: row[9] || '',
-              campanha: row[30] || '',
+              campanha: campanha,
               numeroPi: numeroPi,
               cliente: cliente,
               agencia: agencia

@@ -178,31 +178,13 @@ const CampaignList = ({
     return clients.sort((a, b) => b.metrics.investimento - a.metrics.investimento);
   }, [data, filters, periodFilter, selectedVehicle]);
 
-  // Calcula os PIs disponíveis para cada campanha
+  // Calcula os PIs disponíveis para cada campanha a partir dos dados já filtrados
   const campaignPIs = useMemo(() => {
     if (!data) return new Map<string, string[]>();
 
     const pisByCampaign = new Map<string, Set<string>>();
 
-    let filteredData = [...data];
-
-    if (filters?.dateRange.start) {
-      filteredData = filteredData.filter(d => d.date >= filters.dateRange.start!);
-    }
-    if (filters?.dateRange.end) {
-      filteredData = filteredData.filter(d => d.date <= filters.dateRange.end!);
-    }
-
-    if (periodFilter === '7days') {
-      const sevenDaysAgo = subDays(new Date(), 7);
-      filteredData = filteredData.filter(item => item.date >= sevenDaysAgo);
-    }
-
-    if (selectedVehicle) {
-      filteredData = filteredData.filter(d => d.veiculo === selectedVehicle);
-    }
-
-    filteredData.forEach(item => {
+    data.forEach(item => {
       if (item.numeroPi) {
         if (!pisByCampaign.has(item.campanha)) {
           pisByCampaign.set(item.campanha, new Set());
@@ -217,7 +199,7 @@ const CampaignList = ({
     });
 
     return result;
-  }, [data, filters, periodFilter, selectedVehicle]);
+  }, [data]);
 
   const handlePIClick = (pi: string, e: React.MouseEvent) => {
     e.stopPropagation();
