@@ -4,17 +4,13 @@ interface CreativeImageProps {
   imageUrl: string | null;
   creativeName: string;
   size?: 'small' | 'medium' | 'large';
+  videoUrl?: string | null;
 }
 
-/**
- * Componente para exibir imagem de um criativo
- * Mostra um placeholder caso a imagem não esteja disponível
- */
-const CreativeImage = ({ imageUrl, creativeName, size = 'small' }: CreativeImageProps) => {
+const CreativeImage = ({ imageUrl, creativeName, size = 'small', videoUrl }: CreativeImageProps) => {
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Dimensões baseadas no tamanho
   const dimensions = {
     small: { width: 60, height: 60 },
     medium: { width: 100, height: 100 },
@@ -23,7 +19,30 @@ const CreativeImage = ({ imageUrl, creativeName, size = 'small' }: CreativeImage
 
   const { width, height } = dimensions[size];
 
-  // Se não houver URL ou houver erro ao carregar
+  // Video thumbnail with play icon overlay
+  if (!imageUrl && videoUrl) {
+    return (
+      <div
+        className="relative rounded border border-gray-200 overflow-hidden bg-gray-900"
+        style={{ width, height }}
+        title={creativeName}
+      >
+        <video
+          src={videoUrl}
+          muted
+          preload="metadata"
+          className="w-full h-full object-cover"
+          style={{ width, height }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+          <svg className="text-white drop-shadow" style={{ width: width / 3, height: height / 3 }} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+      </div>
+    );
+  }
+
   if (!imageUrl || imageError) {
     return (
       <div
@@ -55,15 +74,12 @@ const CreativeImage = ({ imageUrl, creativeName, size = 'small' }: CreativeImage
       style={{ width, height }}
       title={creativeName}
     >
-      {/* Loading skeleton */}
       {isLoading && (
         <div
           className="absolute inset-0 bg-gray-200 animate-pulse"
           style={{ width, height }}
         />
       )}
-
-      {/* Imagem */}
       <img
         src={imageUrl}
         alt={creativeName}

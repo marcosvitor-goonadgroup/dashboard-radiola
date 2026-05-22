@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ProcessedCampaignData } from '../types/campaign';
 import { BenchmarkData } from '../services/benchmarkService';
 import BenchmarkIndicator from './BenchmarkIndicator';
-import { getFallbackImageUrl } from '../services/creativeImageService';
+import { getFallbackImageUrl, getLocalCreativeImageUrl, getLocalCreativeVideoUrl } from '../services/creativeImageService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -85,8 +85,8 @@ const CreativeDetailModal = ({ creativeName, data, benchmark, onClose }: Creativ
 
     const firstItem = creativeData[0];
 
-    // Busca a primeira URL de imagem não vazia, com fallback estático
-    const imageUrl = creativeData.find(item => item.image)?.image || getFallbackImageUrl(creativeName) || '';
+    // Busca a primeira URL de imagem não vazia, com fallback local e estático
+    const imageUrl = creativeData.find(item => item.image)?.image || getLocalCreativeImageUrl(creativeName) || getFallbackImageUrl(creativeName) || '';
 
     return {
       ...aggregated,
@@ -205,8 +205,10 @@ const CreativeDetailModal = ({ creativeName, data, benchmark, onClose }: Creativ
   }
 
   const imageUrl = currentMetrics.imageUrl;
+  const localVideoUrl = getLocalCreativeVideoUrl(creativeName);
   const isVideo = formatTipoMidia(currentMetrics.tipoMidia) === 'Vídeo';
   const hasImage = imageUrl && imageUrl.length > 0;
+  const hasLocalVideo = !!localVideoUrl;
 
   // Função para renderizar comparação
   const renderComparison = (value: number, metricKey: 'ctr' | 'vtr' | 'taxaEngajamento') => {
@@ -258,16 +260,23 @@ const CreativeDetailModal = ({ creativeName, data, benchmark, onClose }: Creativ
         <div className="p-6">
           {/* Creative Info Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* Image Preview */}
+            {/* Image / Video Preview */}
             <div className="bg-gray-50 rounded-lg p-4">
-              {hasImage ? (
+              {hasLocalVideo ? (
+                <div className="flex items-center justify-center min-h-[400px]">
+                  <video
+                    src={localVideoUrl!}
+                    controls
+                    className="max-w-full max-h-96 rounded-lg shadow-lg"
+                  />
+                </div>
+              ) : hasImage ? (
                 <div className="flex items-center justify-center min-h-[400px]">
                   <img
                     src={imageUrl}
                     alt={creativeName}
                     className="max-w-full max-h-96 object-contain rounded-lg shadow-lg"
                     onError={(e) => {
-                      // Se a imagem falhar ao carregar, mostra placeholder
                       e.currentTarget.style.display = 'none';
                       e.currentTarget.parentElement!.innerHTML = `
                         <div class="w-full h-96 bg-gray-200 rounded-lg flex items-center justify-center">

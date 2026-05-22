@@ -4,7 +4,7 @@ import BenchmarkIndicator from './BenchmarkIndicator';
 import CreativeImage from './CreativeImage';
 import CreativeDetailModal from './CreativeDetailModal';
 import { fetchAllBenchmarks, BenchmarkData } from '../services/benchmarkService';
-import { getFallbackImageUrl } from '../services/creativeImageService';
+import { getFallbackImageUrl, getLocalCreativeImageUrl, getLocalCreativeVideoUrl } from '../services/creativeImageService';
 
 interface CreativePerformanceProps {
   data: ProcessedCampaignData[];
@@ -16,7 +16,8 @@ interface CreativeData {
   veiculo: string;
   tipoDeCompra: string;
   tipoMidia: string;
-  imageUrl: string; // URL da imagem do criativo da API
+  imageUrl: string;
+  videoUrl: string;
   impressoes: number;
   cliques: number;
   views: number;
@@ -130,7 +131,8 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
           veiculo: item.veiculo,
           tipoDeCompra: item.tipoDeCompra,
           tipoMidia: item.videoEstaticoAudio || 'estatico',
-          imageUrl: item.image || '', // URL da imagem do criativo
+          imageUrl: item.image || '',
+          videoUrl: '',
           impressoes: 0,
           cliques: 0,
           views: 0,
@@ -166,7 +168,8 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
           veiculo: item.veiculo,
           tipoDeCompra: item.tipoDeCompra,
           tipoMidia: item.tipoMidia,
-          imageUrl: item.imageUrl || getFallbackImageUrl(item.name) || '',
+          imageUrl: item.imageUrl || getLocalCreativeImageUrl(item.name) || getFallbackImageUrl(item.name) || '',
+          videoUrl: getLocalCreativeVideoUrl(item.name) || '',
           impressoes: item.impressoes,
           cliques: item.cliques,
           views: item.views,
@@ -396,6 +399,7 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
                           >
                             <CreativeImage
                               imageUrl={creative.imageUrl || null}
+                              videoUrl={creative.videoUrl || null}
                               creativeName={creative.name}
                               size="small"
                             />

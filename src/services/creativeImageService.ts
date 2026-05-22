@@ -1,6 +1,58 @@
-/**
+﻿/**
  * Serviço para buscar imagens de criativos do Google Drive
  */
+
+// Local creative images from src/images/criativos/
+const localCreativeAssets = import.meta.glob<string>('../images/criativos/*', {
+  eager: true,
+  query: '?url',
+  import: 'default'
+});
+
+const extractSlugFromFilename = (filename: string): string | null => {
+  const withoutExt = filename.replace(/\.[^.]+$/, '');
+  const match = withoutExt.match(/_na_(.+?)_na$/);
+  return match ? match[1] : null;
+};
+
+const normalizeAdNameToSlug = (name: string): string =>
+  name.toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.avi']);
+
+const localImageMap = new Map<string, string>();
+const localVideoMap = new Map<string, string>();
+
+Object.entries(localCreativeAssets).forEach(([path, url]) => {
+  const filename = path.split('/').pop() || '';
+  const slug = extractSlugFromFilename(filename);
+  if (!slug) return;
+  const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase();
+  if (VIDEO_EXTENSIONS.has(ext)) {
+    localVideoMap.set(slug, url);
+  } else {
+    localImageMap.set(slug, url);
+  }
+});
+
+const lookupLocal = (map: Map<string, string>, adName: string): string | null => {
+  const slug = normalizeAdNameToSlug(adName);
+  if (map.has(slug)) return map.get(slug)!;
+  for (const [key, url] of map.entries()) {
+    if (slug.includes(key) || key.includes(slug)) return url;
+  }
+  return null;
+};
+
+export const getLocalCreativeImageUrl = (adName: string): string | null =>
+  lookupLocal(localImageMap, adName);
+
+export const getLocalCreativeVideoUrl = (adName: string): string | null =>
+  lookupLocal(localVideoMap, adName);
 
 const API_BASE = import.meta.env.DEV
   ? '/api-proxy'
