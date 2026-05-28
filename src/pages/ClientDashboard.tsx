@@ -15,6 +15,7 @@ import Footer from '../components/Footer';
 import ClientCampaignList from '../components/ClientCampaignList';
 import adDeskWhite from '../images/ad-desk-white.svg';
 import { subDays, startOfDay, format } from 'date-fns';
+import { toSlug } from '../utils/slug';
 
 const slugToClientName = (slug: string): string => slug.toUpperCase();
 
@@ -95,7 +96,7 @@ const ClientDashboardContent = ({ clientName }: { clientName: string }) => {
 
   // Todos os dados do cliente (sem filtro de período)
   const clientData = useMemo(
-    () => filteredData.filter(d => d.cliente?.toUpperCase() === clientName.toUpperCase()),
+    () => filteredData.filter(d => toSlug(d.cliente || '') === toSlug(clientName)),
     [filteredData, clientName]
   );
 

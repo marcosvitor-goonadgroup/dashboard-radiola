@@ -16,6 +16,11 @@ const CONSOLIDADO_API_URLS = [
   `${API_BASE}/google/sheets/1AIWnkmXFM-EKw5R6GlLnMTEDCUeg-XxpYOjZ69GFadY/data?range=Consolidado`
 ];
 
+// APIs com formato "Consolidado V2" — 22 colunas (CRA-RJ e similares)
+const CONSOLIDADO_V2_API_URLS = [
+  `${API_BASE}/google/sheets/1VM5I7CD3e96wwYkjW9t0rDD7Hs2WeW_qeLoRMLgl7ho/data?range=Consolidado`
+];
+
 const SEARCH_API_URLS = [
   `${API_BASE}/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Search`,
   `${API_BASE}/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Search`
@@ -110,20 +115,70 @@ const parseConsolidadoRows = (rows: string[][]): ProcessedCampaignData[] => {
   return data;
 };
 
+// Formato V2: 22 colunas — Date, Campanha Nome, Conjunto Anuncio, Criativo nome,
+// Total spent, Impressions, Clicks, Video views, Video views 25%, Video views 50%,
+// Video views 75%, Video completions, Total engagements, Leads, Image, Veículo,
+// Número de PI, Cliente, Tipo de Compra, Investimento, Nome Campanha, Agência
+const parseConsolidadoV2Rows = (rows: string[][]): ProcessedCampaignData[] => {
+  const data: ProcessedCampaignData[] = [];
+  rows.forEach(row => {
+    if (row.length < 20) return;
+    const numeroPi = row[16] || '';
+    if (numeroPi === '#VALUE!') return;
+
+    const veiculo = normalizeVeiculo(row[15] || '');
+
+    data.push({
+      date: parseConsolidadoDate(row[0]),
+      campaignName: row[1] || '',
+      adSetName: row[2] || '',
+      adName: row[3] || '',
+      cost: parseCurrency(row[19]),
+      impressions: parseNumber(row[5]),
+      reach: 0,
+      clicks: parseNumber(row[6]),
+      videoViews: parseNumber(row[7]),
+      videoViews25: parseNumber(row[8]),
+      videoViews50: parseNumber(row[9]),
+      videoViews75: parseNumber(row[10]),
+      videoCompletions: parseNumber(row[11]),
+      totalEngagements: parseNumber(row[12]),
+      veiculo,
+      tipoDeCompra: row[18] || '',
+      videoEstaticoAudio: '',
+      image: row[14] || '',
+      campanha: row[20] || '',
+      numeroPi,
+      cliente: row[17] || '',
+      agencia: row[21] || ''
+    });
+  });
+  return data;
+};
+
 export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
   try {
-    const [metaResponses, consolidadoResponses] = await Promise.all([
+    const [metaResponses, consolidadoResponses, consolidadoV2Responses] = await Promise.all([
       Promise.all(CAMPAIGN_API_URLS.map(url => axios.get<ApiResponse>(url))),
-      Promise.all(CONSOLIDADO_API_URLS.map(url => axios.get<ApiResponse>(url)))
+      Promise.all(CONSOLIDADO_API_URLS.map(url => axios.get<ApiResponse>(url))),
+      Promise.all(CONSOLIDADO_V2_API_URLS.map(url => axios.get<ApiResponse>(url)))
     ]);
 
     const allData: ProcessedCampaignData[] = [];
 
-    // Parser para planilhas Consolidado
+    // Parser para planilhas Consolidado (formato original)
     consolidadoResponses.forEach(response => {
       if (response.data.success && response.data.data.values.length > 1) {
         const rows = response.data.data.values.slice(1);
         allData.push(...parseConsolidadoRows(rows));
+      }
+    });
+
+    // Parser para planilhas Consolidado V2 (22 colunas — CRA-RJ e similares)
+    consolidadoV2Responses.forEach(response => {
+      if (response.data.success && response.data.data.values.length > 1) {
+        const rows = response.data.data.values.slice(1);
+        allData.push(...parseConsolidadoV2Rows(rows));
       }
     });
 
