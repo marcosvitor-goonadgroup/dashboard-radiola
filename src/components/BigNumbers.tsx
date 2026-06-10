@@ -96,10 +96,8 @@ const BigNumbers = ({
   const cliquesComparison = getComparisonData(metrics.cliques, 'cliques');
   const ctrComparison = getComparisonData(metrics.ctr, 'ctr');
 
-  // Usa investimento real se disponível, senão usa o investimento reportado
-  const displayInvestment = metrics.investimentoReal && metrics.investimentoReal > 0
-    ? metrics.investimentoReal
-    : metrics.investimento;
+  // Sempre usa o gasto real (cost) reportado na planilha
+  const displayInvestment = metrics.investimento;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">

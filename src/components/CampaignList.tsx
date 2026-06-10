@@ -326,11 +326,7 @@ const CampaignList = ({
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className="text-sm font-medium text-gray-900">
-                          {formatCurrency(
-                            client.metrics.investimentoReal && client.metrics.investimentoReal > 0
-                              ? client.metrics.investimentoReal
-                              : client.metrics.investimento
-                          )}
+                          {formatCurrency(client.metrics.investimento)}
                         </p>
                         <p className="text-xs text-gray-500">{formatNumber(client.metrics.impressoes)} imp.</p>
                       </div>
@@ -392,11 +388,7 @@ const CampaignList = ({
                               </p>
                               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                                 <span>
-                                  {formatCurrency(
-                                    campaign.metrics.investimentoReal && campaign.metrics.investimentoReal > 0
-                                      ? campaign.metrics.investimentoReal
-                                      : campaign.metrics.investimento
-                                  )}
+                                  {formatCurrency(campaign.metrics.investimento)}
                                 </span>
                                 <span>{formatNumber(campaign.metrics.impressoes)} imp.</span>
                                 <span>{formatNumber(campaign.metrics.cliques)} cliques</span>

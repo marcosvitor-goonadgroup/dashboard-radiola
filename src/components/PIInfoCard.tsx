@@ -38,7 +38,7 @@ const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
   const totaisRealizados = useMemo(() => {
     return campaignData.reduce(
       (acc, item) => {
-        acc.realizado += item.realInvestment || item.cost;
+        acc.realizado += item.cost;
         acc.impressoes += item.impressions;
         acc.cliques += item.clicks;
         return acc;
@@ -78,12 +78,12 @@ const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
       const key = `${normalizeVehicleName(item.veiculo)}|${item.tipoDeCompra.toUpperCase()}`;
       if (realizadoGrouped.has(key)) {
         const e = realizadoGrouped.get(key)!;
-        e.realizado += item.realInvestment || item.cost;
+        e.realizado += item.cost;
         e.cliques += item.clicks;
         e.impressoes += item.impressions;
       } else {
         realizadoGrouped.set(key, {
-          realizado: item.realInvestment || item.cost,
+          realizado: item.cost,
           cliques: item.clicks,
           impressoes: item.impressions,
         });
