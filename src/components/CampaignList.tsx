@@ -7,6 +7,7 @@ import logoSesi from '../images/sesi_logo.jpg';
 import logoSebrae from '../images/logo_sebrae.png';
 import logoParkshopping from '../images/logo_parkshopping.webp';
 import logoCraRj from '../images/CRA_RJ_logo.png';
+import logoSenac from '../images/logo_senac.webp';
 
 // Mapeamento de logos por cliente
 const clientLogos: Record<string, string> = {
@@ -14,7 +15,8 @@ const clientLogos: Record<string, string> = {
   'SESI': logoSesi,
   'SEBRAE': logoSebrae,
   'PARKSHOPPING': logoParkshopping,
-  'CRA - RJ': logoCraRj
+  'CRA - RJ': logoCraRj,
+  'SENAC': logoSenac
 };
 
 interface CampaignListProps {

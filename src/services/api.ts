@@ -21,6 +21,11 @@ const CONSOLIDADO_V2_API_URLS = [
   `${API_BASE}/google/sheets/1VM5I7CD3e96wwYkjW9t0rDD7Hs2WeW_qeLoRMLgl7ho/data?range=Consolidado`
 ];
 
+// APIs com formato "Consolidado V3" — 28 colunas, layout Google Ads (SENAC e similares)
+const CONSOLIDADO_V3_API_URLS = [
+  `${API_BASE}/google/sheets/1HVL4A7LhjKUMiN_e5Nr-v5FzNw2hDfzkyoWHR0_anqw/data?range=Consolidado`
+];
+
 const SEARCH_API_URLS = [
   `${API_BASE}/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Search`,
   `${API_BASE}/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Search`
@@ -156,12 +161,57 @@ const parseConsolidadoV2Rows = (rows: string[][]): ProcessedCampaignData[] => {
   return data;
 };
 
+// Formato V3: 28 colunas, layout Google Ads —
+// [0] Nome Conta, [1] ID Conta, [2] Data, [3] Device, [4] Campaign Name,
+// [5] Campaign ID, [6] Ad Group Name, [7] Ad group ID, [8] Ad Name, [9] Ad ID,
+// [10] Ad Final URL, [11] Cost (Spend), [12] Impressions, [13] Clicks,
+// [14] Video Views, [15] Views 25%, [16] Views 50%, [17] Views 75%,
+// [18] Views 100%, [19] VA, [20] Agência, [21] Veículo, [22] Número PI,
+// [23] Tipo de Compra, [24] Investimento, [25] Formato, [26] Campanha, [27] Cliente
+const parseConsolidadoV3Rows = (rows: string[][]): ProcessedCampaignData[] => {
+  const data: ProcessedCampaignData[] = [];
+  rows.forEach(row => {
+    if (row.length < 27) return;
+    const numeroPi = row[22] || '';
+    if (numeroPi === '#VALUE!') return;
+
+    const veiculo = normalizeVeiculo(row[21] || '');
+
+    data.push({
+      date: parseConsolidadoDate(row[2]),
+      campaignName: row[4] || '',
+      adSetName: row[6] || '',
+      adName: row[8] || '',
+      cost: parseCurrency(row[24]),
+      impressions: parseNumber(row[12]),
+      reach: 0,
+      clicks: parseNumber(row[13]),
+      videoViews: parseNumber(row[14]),
+      videoViews25: parseNumber(row[15]),
+      videoViews50: parseNumber(row[16]),
+      videoViews75: parseNumber(row[17]),
+      videoCompletions: parseNumber(row[18]),
+      totalEngagements: 0,
+      veiculo,
+      tipoDeCompra: row[23] || '',
+      videoEstaticoAudio: '',
+      image: '',
+      campanha: row[26] || '',
+      numeroPi,
+      cliente: row[27] || '',
+      agencia: row[20] || ''
+    });
+  });
+  return data;
+};
+
 export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
   try {
-    const [metaResponses, consolidadoResponses, consolidadoV2Responses] = await Promise.all([
+    const [metaResponses, consolidadoResponses, consolidadoV2Responses, consolidadoV3Responses] = await Promise.all([
       Promise.all(CAMPAIGN_API_URLS.map(url => axios.get<ApiResponse>(url))),
       Promise.all(CONSOLIDADO_API_URLS.map(url => axios.get<ApiResponse>(url))),
-      Promise.all(CONSOLIDADO_V2_API_URLS.map(url => axios.get<ApiResponse>(url)))
+      Promise.all(CONSOLIDADO_V2_API_URLS.map(url => axios.get<ApiResponse>(url))),
+      Promise.all(CONSOLIDADO_V3_API_URLS.map(url => axios.get<ApiResponse>(url)))
     ]);
 
     const allData: ProcessedCampaignData[] = [];
@@ -179,6 +229,14 @@ export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
       if (response.data.success && response.data.data.values.length > 1) {
         const rows = response.data.data.values.slice(1);
         allData.push(...parseConsolidadoV2Rows(rows));
+      }
+    });
+
+    // Parser para planilhas Consolidado V3 (28 colunas — SENAC e similares)
+    consolidadoV3Responses.forEach(response => {
+      if (response.data.success && response.data.data.values.length > 1) {
+        const rows = response.data.data.values.slice(1);
+        allData.push(...parseConsolidadoV3Rows(rows));
       }
     });
 
