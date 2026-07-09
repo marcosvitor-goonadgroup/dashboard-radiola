@@ -82,6 +82,8 @@ const parseConsolidadoDate = (dateString: string): Date => {
   }
 };
 
+// Formato "Consolidado" original: 29 colunas (Parkshopping).
+// Atenção: "Localização" ocupa o índice 27 — Cliente fica em 28, não em 27.
 const parseConsolidadoRows = (rows: string[][]): ProcessedCampaignData[] => {
   const data: ProcessedCampaignData[] = [];
   rows.forEach(row => {
@@ -113,7 +115,7 @@ const parseConsolidadoRows = (rows: string[][]): ProcessedCampaignData[] => {
       image: '',
       campanha: row[26] || '',
       numeroPi,
-      cliente: row[27] || '',
+      cliente: row[28] || '',
       agencia: row[20] || ''
     });
   });

@@ -9,10 +9,15 @@ const localCreativeAssets = import.meta.glob<string>('../images/criativos/*', {
   import: 'default'
 });
 
+const stripExtension = (filename: string): string => filename.replace(/\.[^.]+$/, '');
+
+// Na taxonomia da plataforma o nome do criativo é o penúltimo segmento:
+//   banner_imagem_none_none_na_moto_na                        → "moto"
+//   display-animado_gif_300x250_none_gif_festival-inverno_na  → "festival-inverno"
 const extractSlugFromFilename = (filename: string): string | null => {
-  const withoutExt = filename.replace(/\.[^.]+$/, '');
-  const match = withoutExt.match(/_na_(.+?)_na$/);
-  return match ? match[1] : null;
+  const segments = stripExtension(filename).split('_');
+  if (segments.length < 2) return null;
+  return segments[segments.length - 2] || null;
 };
 
 const normalizeAdNameToSlug = (name: string): string =>
@@ -24,35 +29,54 @@ const normalizeAdNameToSlug = (name: string): string =>
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.avi']);
 
+// Chave exata: nome do arquivo inteiro. Criativos que só diferem no tamanho
+// (300x250, 728x90...) compartilham o mesmo nome, então só o arquivo completo
+// os distingue.
 const localImageMap = new Map<string, string>();
 const localVideoMap = new Map<string, string>();
 
+// Chave aproximada: apenas o nome do criativo, usada quando o Ad Name não
+// corresponde exatamente ao arquivo.
+const localImageFuzzyMap = new Map<string, string>();
+const localVideoFuzzyMap = new Map<string, string>();
+
 Object.entries(localCreativeAssets).forEach(([path, url]) => {
   const filename = path.split('/').pop() || '';
-  const slug = extractSlugFromFilename(filename);
-  if (!slug) return;
   const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase();
-  if (VIDEO_EXTENSIONS.has(ext)) {
-    localVideoMap.set(slug, url);
-  } else {
-    localImageMap.set(slug, url);
+  const isVideo = VIDEO_EXTENSIONS.has(ext);
+
+  const exactKey = normalizeAdNameToSlug(stripExtension(filename));
+  if (exactKey) {
+    (isVideo ? localVideoMap : localImageMap).set(exactKey, url);
+  }
+
+  const slug = extractSlugFromFilename(filename);
+  if (slug) {
+    (isVideo ? localVideoFuzzyMap : localImageFuzzyMap).set(slug, url);
   }
 });
 
-const lookupLocal = (map: Map<string, string>, adName: string): string | null => {
+const lookupLocal = (
+  exactMap: Map<string, string>,
+  fuzzyMap: Map<string, string>,
+  adName: string
+): string | null => {
   const slug = normalizeAdNameToSlug(adName);
-  if (map.has(slug)) return map.get(slug)!;
-  for (const [key, url] of map.entries()) {
+
+  const exact = exactMap.get(slug);
+  if (exact) return exact;
+
+  for (const [key, url] of fuzzyMap.entries()) {
     if (slug.includes(key) || key.includes(slug)) return url;
   }
   return null;
 };
 
 export const getLocalCreativeImageUrl = (adName: string): string | null =>
-  lookupLocal(localImageMap, adName);
+  lookupLocal(localImageMap, localImageFuzzyMap, adName);
 
 export const getLocalCreativeVideoUrl = (adName: string): string | null =>
-  lookupLocal(localVideoMap, adName);
+  lookupLocal(localVideoMap, localVideoFuzzyMap, adName);
 
 const API_BASE = import.meta.env.DEV
   ? '/api-proxy'

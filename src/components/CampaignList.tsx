@@ -5,7 +5,7 @@ import { toSlug } from '../utils/slug';
 import logoSenai from '../images/Logo-SENAI.png';
 import logoSesi from '../images/sesi_logo.jpg';
 import logoSebrae from '../images/logo_sebrae.png';
-import logoParkshopping from '../images/logo_parkshopping.webp';
+import logoParkshopping from '../images/logo_park-shopping.png';
 import logoCraRj from '../images/CRA_RJ_logo.png';
 import logoSenac from '../images/logo_senac.webp';
 
