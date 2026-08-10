@@ -13,12 +13,51 @@ const fmt = (n: number) =>
 
 const fmtNum = (n: number) => new Intl.NumberFormat('pt-BR').format(Math.round(n));
 
+// Minúsculo, sem espaços nas pontas e sem acentos, para casar "Programática" com "Programatica"
+const normalizeVehicleName = (name: string): string =>
+  name
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .split('')
+    .filter(c => {
+      const code = c.charCodeAt(0);
+      return code < 0x300 || code > 0x36f;
+    })
+    .join('');
+
+// O PI e a planilha de resultados nomeiam o mesmo veículo de formas diferentes:
+// o PI traz "Fb Ig" enquanto os dados chegam com "Facebook" e "Instagram" separados.
+// Chaves e valores já normalizados (minúsculo, sem acento).
+const VEHICLE_ALIASES: Record<string, string[]> = {
+  'fb ig': ['facebook', 'instagram'],
+  'fb/ig': ['facebook', 'instagram'],
+  'fb e ig': ['facebook', 'instagram'],
+  'fb+ig': ['facebook', 'instagram'],
+  'facebook/instagram': ['facebook', 'instagram'],
+  'facebook e instagram': ['facebook', 'instagram'],
+  meta: ['facebook', 'instagram'],
+  'meta ads': ['facebook', 'instagram'],
+  google: ['google search'],
+  'google ads': ['google search'],
+  youtube: ['youtube'],
+};
+
+// Nomes de veículo (como aparecem nos dados) que uma linha do PI representa
+const resolveVehicleNames = (piVeiculo: string): string[] => {
+  const key = normalizeVehicleName(piVeiculo);
+  return VEHICLE_ALIASES[key] ?? [key];
+};
+
+const splitKey = (key: string) => {
+  const i = key.lastIndexOf('|');
+  return { veiculo: key.slice(0, i), tipo: key.slice(i + 1) };
+};
+
 const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
   const [piInfo, setPiInfo] = useState<PIInfo[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-
-  const normalizeVehicleName = (name: string): string => name.toLowerCase().trim();
 
   // Pacing temporal: % dos dias decorridos no período do PI
   const pacingExpected = useMemo(() => {
@@ -101,28 +140,37 @@ const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
       matchedByVehicle: boolean;
     }> = [];
 
+    // Veículos dos dados já representados por alguma linha do PI. Impede que uma linha
+    // genérica absorva o realizado que pertence a outra linha do mesmo tipo de compra.
+    const veiculosDoPI = new Set<string>();
+    piGrouped.forEach(p => resolveVehicleNames(p.veiculo).forEach(n => veiculosDoPI.add(n)));
+
+    const somaRealizados = (aceita: (veiculo: string) => boolean, tipoKey: string) => {
+      let realizado = 0, cliques = 0, impressoes = 0, found = false;
+      for (const [k, v] of realizadoGrouped.entries()) {
+        const { veiculo, tipo } = splitKey(k);
+        if (tipo !== tipoKey || !aceita(veiculo)) continue;
+        realizado += v.realizado;
+        cliques += v.cliques;
+        impressoes += v.impressoes;
+        found = true;
+      }
+      return found ? { realizado, cliques, impressoes } : undefined;
+    };
+
     piGrouped.forEach((piData) => {
       const tipoKey = piData.tipoDeCompra.toUpperCase();
-      const veiculoKey = normalizeVehicleName(piData.veiculo);
+      const nomesDoVeiculo = resolveVehicleNames(piData.veiculo);
 
-      let match = realizadoGrouped.get(`${veiculoKey}|${tipoKey}`);
+      // Soma os realizados dos veículos que esta linha do PI representa
+      // (ex: PI tem "Fb Ig" e os dados têm "Facebook" + "Instagram" separados)
+      let match = somaRealizados(v => nomesDoVeiculo.includes(v), tipoKey);
       let matchedByVehicle = !!match;
 
-      // Se não encontrou por veículo+tipo, soma TODOS os realizados com o mesmo tipo de compra
-      // (ex: PI tem "Fb Ig" mas dados têm "Facebook" + "Instagram" separados, ambos CPC)
+      // Sem nenhum veículo correspondente: fica com o que sobrou do mesmo tipo de compra,
+      // ou seja, os veículos que nenhuma outra linha do PI reivindica
       if (!match) {
-        let totalRealizado = 0, totalCliques = 0, totalImpressoes = 0, found = false;
-        for (const [k, v] of realizadoGrouped.entries()) {
-          if (k.endsWith(`|${tipoKey}`)) {
-            totalRealizado += v.realizado;
-            totalCliques += v.cliques;
-            totalImpressoes += v.impressoes;
-            found = true;
-          }
-        }
-        if (found) {
-          match = { realizado: totalRealizado, cliques: totalCliques, impressoes: totalImpressoes };
-        }
+        match = somaRealizados(v => !veiculosDoPI.has(v), tipoKey);
       }
 
       if (!match && piGrouped.size === 1) {
