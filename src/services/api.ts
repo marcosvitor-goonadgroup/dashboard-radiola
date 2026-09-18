@@ -7,18 +7,15 @@ const API_BASE = import.meta.env.DEV
   ? '/api-proxy'
   : 'https://nmbcoamazonia-api.vercel.app';
 
-const CAMPAIGN_API_URLS = [
-  `${API_BASE}/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Meta`
-];
-
 // APIs com formato "Consolidado" (colunas e data diferentes)
 const CONSOLIDADO_API_URLS = [
   `${API_BASE}/google/sheets/1AIWnkmXFM-EKw5R6GlLnMTEDCUeg-XxpYOjZ69GFadY/data?range=Consolidado`
 ];
 
-// APIs com formato "Consolidado V2" — 22 colunas (CRA-RJ e similares)
+// APIs com formato "Consolidado V2" — 22 colunas (CRA-RJ, SEBRAE e similares)
 const CONSOLIDADO_V2_API_URLS = [
-  `${API_BASE}/google/sheets/1VM5I7CD3e96wwYkjW9t0rDD7Hs2WeW_qeLoRMLgl7ho/data?range=Consolidado`
+  `${API_BASE}/google/sheets/1VM5I7CD3e96wwYkjW9t0rDD7Hs2WeW_qeLoRMLgl7ho/data?range=Consolidado`,
+  `${API_BASE}/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Consolidado`
 ];
 
 // APIs com formato "Consolidado V3" — 28 colunas, layout Google Ads (SENAC e similares)
@@ -64,13 +61,40 @@ const parseSearchDate = (dateString: string): Date => {
   }
 };
 
+// Placements da família Meta chegam separados na planilha (e "unknown" quando
+// a API não identifica o placement) — todos entram consolidados em "Facebook".
+const META_PLACEMENTS = new Set([
+  'audience network',
+  'messenger',
+  'threads',
+  'whatsapp',
+  'unknown'
+]);
+
+// Cada fonte escreve o veículo com uma caixa diferente ("instagram", "Google ads").
+// Sem canonizar, o mesmo veículo viraria duas linhas na Performance por Veículo
+// e perderia benchmark e cálculo de investimento.
+const VEICULO_CANONICO: { [key: string]: string } = {
+  'facebook': 'Facebook',
+  'instagram': 'Instagram',
+  'tiktok': 'TikTok',
+  'linkedin': 'LinkedIn',
+  'kwai': 'Kwai',
+  'youtube': 'YouTube',
+  'twitter': 'Twitter',
+  'google ads': 'Google Ads',
+  'google search': 'Google Search',
+  'programatica': 'Programática',
+  'programática': 'Programática'
+};
+
 const normalizeVeiculo = (veiculo: string): string => {
   const normalized = veiculo.trim();
   const lower = normalized.toLowerCase();
-  if (lower === 'audience network' || lower === 'messenger' || lower === 'threads' || lower === 'unknown') {
+  if (META_PLACEMENTS.has(lower)) {
     return 'Facebook';
   }
-  return normalized;
+  return VEICULO_CANONICO[lower] || normalized;
 };
 
 const parseConsolidadoDate = (dateString: string): Date => {
@@ -209,8 +233,7 @@ const parseConsolidadoV3Rows = (rows: string[][]): ProcessedCampaignData[] => {
 
 export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
   try {
-    const [metaResponses, consolidadoResponses, consolidadoV2Responses, consolidadoV3Responses] = await Promise.all([
-      Promise.all(CAMPAIGN_API_URLS.map(url => axios.get<ApiResponse>(url))),
+    const [consolidadoResponses, consolidadoV2Responses, consolidadoV3Responses] = await Promise.all([
       Promise.all(CONSOLIDADO_API_URLS.map(url => axios.get<ApiResponse>(url))),
       Promise.all(CONSOLIDADO_V2_API_URLS.map(url => axios.get<ApiResponse>(url))),
       Promise.all(CONSOLIDADO_V3_API_URLS.map(url => axios.get<ApiResponse>(url)))
@@ -239,57 +262,6 @@ export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
       if (response.data.success && response.data.data.values.length > 1) {
         const rows = response.data.data.values.slice(1);
         allData.push(...parseConsolidadoV3Rows(rows));
-      }
-    });
-
-    const responses = metaResponses;
-
-    responses.forEach(response => {
-      if (response.data.success && response.data.data.values.length > 1) {
-        const rows = response.data.data.values.slice(1);
-        rows.forEach(row => {
-          if (row.length >= 14) {
-            // Planilhas com 33 colunas (ex: SEBRAE) têm layout estendido
-            const extended = row.length >= 33;
-            const numeroPi = extended ? (row[32] || '') : (row[26] || '');
-            const campanha  = extended ? (row[30] || '') : (row[30] || '');
-            const agencia   = extended ? (row[31] || '') : (row[31] || '');
-            const veiculoRaw = row[25] || '';
-            const veiculo = normalizeVeiculo(veiculoRaw);
-            const cliente = row[27] || '';
-
-            // Ignora linhas onde o Número PI é "#VALUE!"
-            if (numeroPi === '#VALUE!') {
-              return;
-            }
-
-            const dataRow: ProcessedCampaignData = {
-              date: parseSearchDate(row[0]),   // formato yyyy-MM-dd
-              campaignName: row[3] || '',
-              adSetName: row[7] || '',
-              adName: row[8] || '',
-              cost: parseCurrency(row[29]),     // coluna Investimento
-              impressions: parseNumber(row[11]),
-              reach: parseNumber(row[12]),
-              clicks: parseNumber(row[13]),
-              videoViews: parseNumber(row[14]),
-              videoViews25: parseNumber(row[15]),
-              videoViews50: parseNumber(row[16]),
-              videoViews75: parseNumber(row[17]),
-              videoCompletions: parseNumber(row[18]),
-              totalEngagements: parseNumber(row[21]),
-              veiculo: veiculo,
-              tipoDeCompra: row[28] || '',
-              videoEstaticoAudio: '',
-              image: row[9] || '',
-              campanha: campanha,
-              numeroPi: numeroPi,
-              cliente: cliente,
-              agencia: agencia
-            };
-            allData.push(dataRow);
-          }
-        });
       }
     });
 
