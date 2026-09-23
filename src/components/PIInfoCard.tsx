@@ -2,10 +2,26 @@ import { useEffect, useState, useMemo } from 'react';
 import { PIInfo, ProcessedCampaignData } from '../types/campaign';
 import { fetchPIInfo } from '../services/api';
 import { parse, isValid, differenceInDays } from 'date-fns';
+import {
+  agruparVeiculacaoPI,
+  aplicarBonificacao,
+  calcularTotaisRealizados,
+  parseValorPI,
+  VeiculacaoBonificada,
+} from '../utils/piMatching';
+import { GA4Fonte, metricasDoVeiculoPI } from '../services/ga4';
 
 interface PIInfoCardProps {
   numeroPi: string | null;
   campaignData?: ProcessedCampaignData[];
+  /** Linhas do PI já carregadas pelo pai — evita uma segunda busca na planilha */
+  piInfoExterno?: PIInfo[] | null;
+  /** Acompanha o carregamento do pai quando as linhas vêm de fora */
+  carregandoExterno?: boolean;
+  /** Trava o realizado no investimento contratado e exibe o excedente como bonificação */
+  bonificacao?: boolean;
+  /** Leads do GA4 por origem, para atribuir a cada veículo do PI */
+  leadsPorFonte?: GA4Fonte[];
 }
 
 const fmt = (n: number) =>
@@ -13,51 +29,21 @@ const fmt = (n: number) =>
 
 const fmtNum = (n: number) => new Intl.NumberFormat('pt-BR').format(Math.round(n));
 
-// Minúsculo, sem espaços nas pontas e sem acentos, para casar "Programática" com "Programatica"
-const normalizeVehicleName = (name: string): string =>
-  name
-    .toLowerCase()
-    .trim()
-    .normalize('NFD')
-    .split('')
-    .filter(c => {
-      const code = c.charCodeAt(0);
-      return code < 0x300 || code > 0x36f;
-    })
-    .join('');
-
-// O PI e a planilha de resultados nomeiam o mesmo veículo de formas diferentes:
-// o PI traz "Fb Ig" enquanto os dados chegam com "Facebook" e "Instagram" separados.
-// Chaves e valores já normalizados (minúsculo, sem acento).
-const VEHICLE_ALIASES: Record<string, string[]> = {
-  'fb ig': ['facebook', 'instagram'],
-  'fb/ig': ['facebook', 'instagram'],
-  'fb e ig': ['facebook', 'instagram'],
-  'fb+ig': ['facebook', 'instagram'],
-  'facebook/instagram': ['facebook', 'instagram'],
-  'facebook e instagram': ['facebook', 'instagram'],
-  meta: ['facebook', 'instagram'],
-  'meta ads': ['facebook', 'instagram'],
-  google: ['google search'],
-  'google ads': ['google search'],
-  youtube: ['youtube'],
-};
-
-// Nomes de veículo (como aparecem nos dados) que uma linha do PI representa
-const resolveVehicleNames = (piVeiculo: string): string[] => {
-  const key = normalizeVehicleName(piVeiculo);
-  return VEHICLE_ALIASES[key] ?? [key];
-};
-
-const splitKey = (key: string) => {
-  const i = key.lastIndexOf('|');
-  return { veiculo: key.slice(0, i), tipo: key.slice(i + 1) };
-};
-
-const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
-  const [piInfo, setPiInfo] = useState<PIInfo[] | null>(null);
-  const [loading, setLoading] = useState(false);
+const PIInfoCard = ({
+  numeroPi,
+  campaignData = [],
+  piInfoExterno,
+  carregandoExterno = false,
+  bonificacao = false,
+  leadsPorFonte,
+}: PIInfoCardProps) => {
+  const [piInfoBuscado, setPiInfoBuscado] = useState<PIInfo[] | null>(null);
+  const [loadingBusca, setLoadingBusca] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const usaPiExterno = piInfoExterno !== undefined;
+  const piInfo = usaPiExterno ? piInfoExterno : piInfoBuscado;
+  const loading = usaPiExterno ? carregandoExterno : loadingBusca;
 
   // Pacing temporal: % dos dias decorridos no período do PI
   const pacingExpected = useMemo(() => {
@@ -74,132 +60,32 @@ const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
   }, [piInfo]);
 
   // Totais realizados de TODA a campaignData filtrada (já filtrada por PI no pai)
-  const totaisRealizados = useMemo(() => {
-    return campaignData.reduce(
-      (acc, item) => {
-        acc.realizado += item.cost;
-        acc.impressoes += item.impressions;
-        acc.cliques += item.clicks;
-        return acc;
-      },
-      { realizado: 0, impressoes: 0, cliques: 0 }
-    );
-  }, [campaignData]);
+  const totaisRealizados = useMemo(
+    () => calcularTotaisRealizados(campaignData),
+    [campaignData]
+  );
 
   // Detalhamento por veículo+tipo do PI, cruzado com os dados realizados
-  const veiculacaoPorVeiculoTipo = useMemo(() => {
-    if (!piInfo || piInfo.length === 0) return [];
+  const veiculacaoPorVeiculoTipo = useMemo(
+    () => agruparVeiculacaoPI(piInfo, campaignData, totaisRealizados),
+    [campaignData, piInfo, totaisRealizados]
+  );
 
-    // Agrupa PI por veículo+tipo
-    const piGrouped = new Map<string, {
-      veiculo: string;
-      tipoDeCompra: string;
-      previsto: number;
-      quantidade: number;
-    }>();
-
-    piInfo.forEach(info => {
-      const key = `${normalizeVehicleName(info.veiculo)}|${info.modeloCompra.toUpperCase()}`;
-      const valor = parseFloat(info.totalBruto.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
-      const qtd = parseFloat(info.quantidade.replace(/\./g, '').replace(',', '.').trim()) || 0;
-      if (piGrouped.has(key)) {
-        const e = piGrouped.get(key)!;
-        e.previsto += valor;
-        e.quantidade += qtd;
-      } else {
-        piGrouped.set(key, { veiculo: info.veiculo, tipoDeCompra: info.modeloCompra, previsto: valor, quantidade: qtd });
-      }
-    });
-
-    // Agrupa realizados por veículo+tipo da campanha
-    const realizadoGrouped = new Map<string, { realizado: number; cliques: number; impressoes: number }>();
-    campaignData.forEach(item => {
-      const key = `${normalizeVehicleName(item.veiculo)}|${item.tipoDeCompra.toUpperCase()}`;
-      if (realizadoGrouped.has(key)) {
-        const e = realizadoGrouped.get(key)!;
-        e.realizado += item.cost;
-        e.cliques += item.clicks;
-        e.impressoes += item.impressions;
-      } else {
-        realizadoGrouped.set(key, {
-          realizado: item.cost,
-          cliques: item.clicks,
-          impressoes: item.impressions,
-        });
-      }
-    });
-
-    const resultado: Array<{
-      veiculo: string;
-      tipoDeCompra: string;
-      previsto: number;
-      realizado: number;
-      quantidade: number;
-      impressoesRealizadas: number;
-      cliquesRealizados: number;
-      matchedByVehicle: boolean;
-    }> = [];
-
-    // Veículos dos dados já representados por alguma linha do PI. Impede que uma linha
-    // genérica absorva o realizado que pertence a outra linha do mesmo tipo de compra.
-    const veiculosDoPI = new Set<string>();
-    piGrouped.forEach(p => resolveVehicleNames(p.veiculo).forEach(n => veiculosDoPI.add(n)));
-
-    const somaRealizados = (aceita: (veiculo: string) => boolean, tipoKey: string) => {
-      let realizado = 0, cliques = 0, impressoes = 0, found = false;
-      for (const [k, v] of realizadoGrouped.entries()) {
-        const { veiculo, tipo } = splitKey(k);
-        if (tipo !== tipoKey || !aceita(veiculo)) continue;
-        realizado += v.realizado;
-        cliques += v.cliques;
-        impressoes += v.impressoes;
-        found = true;
-      }
-      return found ? { realizado, cliques, impressoes } : undefined;
-    };
-
-    piGrouped.forEach((piData) => {
-      const tipoKey = piData.tipoDeCompra.toUpperCase();
-      const nomesDoVeiculo = resolveVehicleNames(piData.veiculo);
-
-      // Soma os realizados dos veículos que esta linha do PI representa
-      // (ex: PI tem "Fb Ig" e os dados têm "Facebook" + "Instagram" separados)
-      let match = somaRealizados(v => nomesDoVeiculo.includes(v), tipoKey);
-      let matchedByVehicle = !!match;
-
-      // Sem nenhum veículo correspondente: fica com o que sobrou do mesmo tipo de compra,
-      // ou seja, os veículos que nenhuma outra linha do PI reivindica
-      if (!match) {
-        match = somaRealizados(v => !veiculosDoPI.has(v), tipoKey);
-      }
-
-      if (!match && piGrouped.size === 1) {
-        match = { realizado: totaisRealizados.realizado, cliques: totaisRealizados.cliques, impressoes: totaisRealizados.impressoes };
-      }
-
-      resultado.push({
-        veiculo: piData.veiculo,
-        tipoDeCompra: piData.tipoDeCompra,
-        previsto: piData.previsto,
-        realizado: match?.realizado ?? 0,
-        quantidade: piData.quantidade,
-        impressoesRealizadas: match?.impressoes ?? 0,
-        cliquesRealizados: match?.cliques ?? 0,
-        matchedByVehicle,
-      });
-    });
-
-    return resultado;
-  }, [campaignData, piInfo, totaisRealizados]);
+  // Teto contratado por veículo: o que passou disso vira bonificação
+  const resumoBonificacao = useMemo(
+    () => (bonificacao ? aplicarBonificacao(veiculacaoPorVeiculoTipo, totaisRealizados) : null),
+    [bonificacao, veiculacaoPorVeiculoTipo, totaisRealizados]
+  );
 
   useEffect(() => {
-    if (!numeroPi) { setPiInfo(null); return; }
-    setLoading(true);
+    if (usaPiExterno) return;
+    if (!numeroPi) { setPiInfoBuscado(null); return; }
+    setLoadingBusca(true);
     fetchPIInfo(numeroPi)
-      .then(setPiInfo)
-      .catch(() => setPiInfo(null))
-      .finally(() => setLoading(false));
-  }, [numeroPi]);
+      .then(setPiInfoBuscado)
+      .catch(() => setPiInfoBuscado(null))
+      .finally(() => setLoadingBusca(false));
+  }, [numeroPi, usaPiExterno]);
 
   if (!numeroPi) return null;
 
@@ -224,11 +110,11 @@ const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
   }
 
   const firstInfo = piInfo[0];
-  const totalInvestimento = piInfo.reduce((sum, info) => {
-    return sum + (parseFloat(info.totalBruto.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0);
-  }, 0);
+  const totalInvestimento = piInfo.reduce((sum, info) => sum + parseValorPI(info.totalBruto), 0);
   const pacingInvestPrevisto = totalInvestimento * (pacingExpected?.percentElapsed ?? 1);
-  const pacingOk = totaisRealizados.realizado >= pacingInvestPrevisto;
+  // Com bonificação ativa o cliente só é cobrado até o teto — é esse o valor que conta
+  const realizadoExibido = resumoBonificacao?.realizado ?? totaisRealizados.realizado;
+  const pacingOk = realizadoExibido >= pacingInvestPrevisto;
 
   return (
     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-[24px] shadow-lg border border-blue-200 overflow-hidden">
@@ -287,11 +173,27 @@ const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
                   </span>
                 </div>
                 <p className={`text-sm font-semibold ${pacingOk ? 'text-green-700' : 'text-red-700'}`}>
-                  {fmt(totaisRealizados.realizado)}
+                  {fmt(realizadoExibido)}
                   <span className="text-xs ml-1 font-normal text-gray-500">
-                    ({((totaisRealizados.realizado / totalInvestimento) * 100).toFixed(1)}% do total)
+                    ({totalInvestimento > 0 ? ((realizadoExibido / totalInvestimento) * 100).toFixed(1) : '0.0'}% do total)
                   </span>
                 </p>
+                {resumoBonificacao && resumoBonificacao.bonificacao > 0 && (
+                  <div className="mt-2 pt-2 border-t border-dashed border-amber-300">
+                    <div className="flex justify-between items-center">
+                      <p className="text-xs text-amber-700 font-medium">Bonificação</p>
+                      <span className="px-2 py-0.5 text-[10px] font-semibold rounded-lg bg-amber-100 text-amber-700">
+                        entregue sem custo
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-amber-700">
+                      {fmt(resumoBonificacao.bonificacao)}
+                      <span className="text-xs ml-1 font-normal text-gray-500">
+                        (veiculado {fmt(resumoBonificacao.realizadoBruto)})
+                      </span>
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -314,11 +216,17 @@ const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
           <div className="bg-white rounded-xl p-4 shadow-sm">
             <p className="text-xs font-medium text-gray-500 mb-3">Detalhamento por Veículo</p>
             <div className="space-y-4">
-              {veiculacaoPorVeiculoTipo.map((item, index) => {
+              {(resumoBonificacao?.linhas ?? veiculacaoPorVeiculoTipo).map((item, index) => {
                 const isCPM = item.tipoDeCompra.toUpperCase().includes('CPM');
                 const isCPC = item.tipoDeCompra.toUpperCase().includes('CPC');
                 const pacingPrevisto = item.previsto * (pacingExpected?.percentElapsed ?? 1);
-                const investOk = item.realizado >= pacingPrevisto;
+                // Com bonificação, o realizado do veículo é o valor travado no teto
+                const linhaBonificada = resumoBonificacao ? (item as VeiculacaoBonificada) : null;
+                const realizadoLinha = linhaBonificada ? linhaBonificada.realizadoConsiderado : item.realizado;
+                const bonificacaoLinha = linhaBonificada?.bonificacao ?? 0;
+                const volumeBonificado = linhaBonificada?.volumeBonificado ?? 0;
+                const investOk = realizadoLinha >= pacingPrevisto;
+                const ga4Veiculo = leadsPorFonte ? metricasDoVeiculoPI(item.veiculo, leadsPorFonte) : null;
 
                 const volumeRealizado = isCPM ? item.impressoesRealizadas : isCPC ? item.cliquesRealizados : 0;
                 const volumePacingPrevisto = item.quantidade * (pacingExpected?.percentElapsed ?? 1);
@@ -359,13 +267,38 @@ const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
                       <div>
                         <p className="text-xs text-gray-500">Invest. Realizado</p>
                         <p className={`text-sm font-semibold ${investOk ? 'text-green-700' : 'text-red-700'}`}>
-                          {fmt(item.realizado)}
+                          {fmt(realizadoLinha)}
                           {item.previsto > 0 && (
-                            <span className="text-xs ml-1 font-normal">({((item.realizado / item.previsto) * 100).toFixed(1)}%)</span>
+                            <span className="text-xs ml-1 font-normal">({((realizadoLinha / item.previsto) * 100).toFixed(1)}%)</span>
                           )}
                         </p>
+                        {bonificacaoLinha > 0 && (
+                          <p className="text-xs text-amber-700 mt-0.5">
+                            Bonificação: <span className="font-semibold">{fmt(bonificacaoLinha)}</span>
+                          </p>
+                        )}
                       </div>
                     </div>
+
+                    {/* Leads da landing page atribuídos a este veículo */}
+                    {ga4Veiculo && (
+                      <div className="grid grid-cols-3 gap-3 mb-3 pb-3 border-b border-gray-200">
+                        <div>
+                          <p className="text-xs text-gray-500">Sessões LP</p>
+                          <p className="text-sm font-semibold text-gray-700">{fmtNum(ga4Veiculo.sessoes)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Leads</p>
+                          <p className="text-sm font-semibold text-[#153ece]">{fmtNum(ga4Veiculo.leads)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">CPL</p>
+                          <p className="text-sm font-semibold text-gray-700">
+                            {ga4Veiculo.leads > 0 ? fmt(realizadoLinha / ga4Veiculo.leads) : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Barra de pacing de volume */}
                     {(isCPM || isCPC) && item.quantidade > 0 && (
@@ -398,9 +331,14 @@ const PIInfoCard = ({ numeroPi, campaignData = [] }: PIInfoCardProps) => {
                             {' '}— linha laranja na barra
                           </p>
                         )}
-                        {isCPC && item.realizado > 0 && item.cliquesRealizados > 0 && (
+                        {volumeBonificado > 0 && (
+                          <p className="text-xs text-amber-700 mt-0.5">
+                            {fmtNum(volumeBonificado)} {isCPM ? 'impressões' : 'cliques'} além do contratado
+                          </p>
+                        )}
+                        {isCPC && realizadoLinha > 0 && item.cliquesRealizados > 0 && (
                           <p className="text-xs text-gray-500 mt-1">
-                            CPC Real: {fmt(item.realizado / item.cliquesRealizados)}
+                            CPC Real: {fmt(realizadoLinha / item.cliquesRealizados)}
                           </p>
                         )}
                       </div>

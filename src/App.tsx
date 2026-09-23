@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, JSX } from 'react';
 import { CampaignProvider, useCampaign } from './contexts/CampaignContext';
 import ClientDashboard from './pages/ClientDashboard';
 import CampaignDashboard from './pages/CampaignDashboard';
 import PIDashboard from './pages/PIDashboard';
+import PIDashboardAlimenta from './pages/PIDashboardAlimenta';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import BigNumbers from './components/BigNumbers';
@@ -432,6 +433,17 @@ const DashboardContent = () => {
   );
 };
 
+/**
+ * PIs com dashboard próprio, fora do PIDashboard padrão.
+ *
+ * A chave é a rota "cliente/campanha/pi" — a URL não muda, então os links de
+ * olhinho já existentes continuam valendo. Todo PI fora desta lista segue no
+ * PIDashboard de sempre.
+ */
+const PIS_COM_DASHBOARD_PROPRIO: Record<string, (p: { clientSlug: string; campaignSlug: string; piSlug: string }) => JSX.Element> = {
+  'sebrae/alimenta-2026/1952': props => <PIDashboardAlimenta {...props} campanhaGA4="alimenta" />
+};
+
 function App() {
   const parts = window.location.pathname
     .replace(/^\//, '')
@@ -444,6 +456,10 @@ function App() {
   const piSlug = parts[2] || '';
 
   if (clientSlug && campaignSlug && piSlug) {
+    const dashboardProprio = PIS_COM_DASHBOARD_PROPRIO[`${clientSlug}/${campaignSlug}/${piSlug}`];
+    if (dashboardProprio) {
+      return dashboardProprio({ clientSlug, campaignSlug, piSlug });
+    }
     return <PIDashboard clientSlug={clientSlug} campaignSlug={campaignSlug} piSlug={piSlug} />;
   }
 

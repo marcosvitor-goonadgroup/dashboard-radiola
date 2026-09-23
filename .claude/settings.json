@@ -3,7 +3,8 @@
     "allow": [
       "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Consolidado\" -o sebrae.json)",
       "Bash(python -c ' *)",
-      "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Meta\" -o sebrae_meta.json)"
+      "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Meta\" -o sebrae_meta.json)",
+      "Bash(python -)"
     ]
   }
 }

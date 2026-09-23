@@ -15,6 +15,13 @@ interface BigNumbersProps {
   comparisonMode?: 'benchmark' | 'previous';
   previousPeriodMetrics?: CampaignMetrics | null;
   selectedPI?: string | null;
+  /** Métricas da landing page (GA4). Quando ausente, a linha mantém os 5 cards de sempre. */
+  lpMetrics?: {
+    sessoes: number;
+    leads: number;
+    cpl: number;
+    carregando?: boolean;
+  } | null;
 }
 
 const formatNumber = (num: number): string => {
@@ -41,7 +48,8 @@ const BigNumbers = ({
   generalBenchmarks,
   comparisonMode = 'benchmark',
   previousPeriodMetrics,
-  selectedPI
+  selectedPI,
+  lpMetrics
 }: BigNumbersProps) => {
   // Detecta se há filtros ativos
   const hasActiveFilters = () => {
@@ -100,7 +108,7 @@ const BigNumbers = ({
   const displayInvestment = metrics.investimento;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+    <div className={`grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 ${lpMetrics ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
       {/* Investimento - usando valor real */}
       <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
         <p className="text-[10px] sm:text-xs font-medium text-gray-500 mb-1">
@@ -284,6 +292,34 @@ const BigNumbers = ({
           )}
         </div>
       </div>
+
+      {/* Landing page: sessões, leads e CPL vindos do GA4 */}
+      {lpMetrics && (
+        <div className="bg-white rounded-lg border border-[#153ece]/30 p-3 sm:p-4">
+          <p className="text-[10px] sm:text-xs font-medium text-gray-500 mb-1">
+            Sessões <span className="text-gray-400 font-normal">LP</span>
+          </p>
+          <p className="text-base sm:text-2xl font-bold text-[#153ece] leading-tight">
+            {lpMetrics.carregando ? (
+              <span className="text-gray-300">—</span>
+            ) : (
+              <AnimatedNumber value={lpMetrics.sessoes} formatter={formatNumber} duration={2000} />
+            )}
+          </p>
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            <p className="text-xs text-gray-500 mb-1">Leads gerados</p>
+            <p className="text-sm font-bold text-gray-800">
+              {lpMetrics.carregando ? '—' : formatNumber(lpMetrics.leads)}
+            </p>
+          </div>
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            <p className="text-xs text-gray-500 mb-1">CPL</p>
+            <p className="text-sm font-bold text-gray-800">
+              {lpMetrics.carregando || lpMetrics.leads === 0 ? '—' : formatCurrency(lpMetrics.cpl)}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
