@@ -4,7 +4,9 @@
       "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Consolidado\" -o sebrae.json)",
       "Bash(python -c ' *)",
       "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Meta\" -o sebrae_meta.json)",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(NODE_PATH=C:/Users/marco/OneDrive/Desktop/GOON/AdDesk/Radiola/node_modules npx --prefix C:/Users/marco/OneDrive/Desktop/GOON/AdDesk/Radiola esbuild C:/Users/marco/AppData/Local/Temp/claude/c--Users-marco-OneDrive-Desktop-GOON-AdDesk-Radiola/ca7c05fb-c593-40b0-bedd-a17d04fdceb6/scratchpad/probe6.ts --bundle --platform=node --format=cjs --define:import.meta.env.DEV=false --outfile=C:/Users/marco/AppData/Local/Temp/claude/c--Users-marco-OneDrive-Desktop-GOON-AdDesk-Radiola/ca7c05fb-c593-40b0-bedd-a17d04fdceb6/scratchpad/probe6.cjs --log-level=error)",
+      "Bash(node C:/Users/marco/AppData/Local/Temp/claude/c--Users-marco-OneDrive-Desktop-GOON-AdDesk-Radiola/ca7c05fb-c593-40b0-bedd-a17d04fdceb6/scratchpad/probe6.cjs)"
     ]
   }
 }

@@ -19,6 +19,7 @@ import {
   aplicarBonificacao,
   calcularTotaisRealizados,
 } from '../utils/piMatching';
+import { aplicarTetoAosItens, atribuirLeadsAosCriativos } from '../utils/leadsCriativos';
 
 /**
  * Dashboard do PI 1952 (SEBRAE — ALIMENTA 2026).
@@ -199,12 +200,23 @@ const PIDashboardAlimentaContent = ({
     };
   }, [ga4, resumoBonificacao, carregandoPIeLP]);
 
+  // Cada linha de mídia ganha o custo já travado no teto e os leads da LP do seu
+  // criativo (cruzados por veículo e por dia), para a tabela de criativos
+  const piDataComLeads = useMemo(
+    () =>
+      atribuirLeadsAosCriativos(
+        aplicarTetoAosItens(piData, resumoBonificacao.linhas),
+        ga4?.porCriativo ?? []
+      ).itens,
+    [piData, resumoBonificacao, ga4]
+  );
+
   const displayData = useMemo(() => {
-    let d = piData;
+    let d = piDataComLeads;
     if (periodFilter === '7days') d = d.filter(i => i.date >= sevenDaysAgoFromMaxDate);
     if (selectedVehicle) d = d.filter(i => i.veiculo === selectedVehicle);
     return d;
-  }, [piData, periodFilter, sevenDaysAgoFromMaxDate, selectedVehicle]);
+  }, [piDataComLeads, periodFilter, sevenDaysAgoFromMaxDate, selectedVehicle]);
 
   const previousPeriodMetrics = useMemo(() => {
     if (periodFilter !== '7days') return null;
@@ -368,7 +380,7 @@ const PIDashboardAlimentaContent = ({
               selectedPI={piSlug}
             />
 
-            <CreativePerformance data={displayData} />
+            <CreativePerformance data={displayData} mostrarLeads />
           </div>
         </main>
 

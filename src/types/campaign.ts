@@ -53,6 +53,8 @@ export interface ProcessedCampaignData {
   cliente: string;
   agencia: string;
   realInvestment?: number; // Investimento calculado pela tabela de preços
+  leads?: number; // Leads da landing page (GA4) atribuídos a esta linha — só em dashboards com LP
+  custoCobrado?: number; // Custo após o teto de bonificação — só em dashboards com bonificação
 }
 
 export interface CampaignMetrics {

@@ -8,6 +8,8 @@ import { getFallbackImageUrl, getLocalCreativeImageUrl, getLocalCreativeVideoUrl
 
 interface CreativePerformanceProps {
   data: ProcessedCampaignData[];
+  /** Exibe Leads e CPL por criativo (requer `leads` nos dados). Desligado, a tabela fica como sempre. */
+  mostrarLeads?: boolean;
 }
 
 interface CreativeData {
@@ -25,7 +27,13 @@ interface CreativeData {
   ctr: number;
   vtr: number;
   taxaEngajamento: number;
+  leads: number;
+  /** null quando o criativo não tem lead — não há custo por lead a mostrar */
+  cpl: number | null;
 }
+
+const formatCurrency = (num: number): string =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
 
 const formatNumber = (num: number): string => {
   if (num >= 1000000) {
@@ -55,10 +63,10 @@ const formatTipoMidia = (tipoMidia: string): string => {
   return 'Estático'; // default
 };
 
-type SortField = 'name' | 'impressoes' | 'views' | 'engajamento' | 'cliques' | 'vtr' | 'taxaEngajamento' | 'ctr';
+type SortField = 'name' | 'impressoes' | 'views' | 'engajamento' | 'cliques' | 'vtr' | 'taxaEngajamento' | 'ctr' | 'leads' | 'cpl';
 type SortDirection = 'asc' | 'desc';
 
-const CreativePerformance = ({ data }: CreativePerformanceProps) => {
+const CreativePerformance = ({ data, mostrarLeads = false }: CreativePerformanceProps) => {
   const [selectedVeiculo, setSelectedVeiculo] = useState<string>('all');
   const [selectedTipoCompra, setSelectedTipoCompra] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -137,7 +145,9 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
           cliques: 0,
           views: 0,
           engajamento: 0,
-          videoCompletions: 0
+          videoCompletions: 0,
+          leads: 0,
+          custo: 0
         };
       }
 
@@ -151,6 +161,9 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
       acc[key].views += item.videoViews;
       acc[key].engajamento += item.totalEngagements;
       acc[key].videoCompletions += item.videoCompletions;
+      acc[key].leads += item.leads ?? 0;
+      // Com bonificação, o CPL usa o custo já travado no teto contratado
+      acc[key].custo += item.custoCobrado ?? item.cost;
 
       return acc;
     }, {} as Record<string, any>);
@@ -176,19 +189,26 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
           engajamento: item.engajamento,
           ctr,
           vtr,
-          taxaEngajamento
+          taxaEngajamento,
+          leads: item.leads,
+          cpl: item.leads > 0 ? item.custo / item.leads : null
         };
       }) as CreativeData[];
 
     // Apply sorting
     creativesArray.sort((a, b) => {
+      // Criativo sem lead não tem CPL: vai sempre para o fim, em qualquer direção
+      if (sortField === 'cpl' && (a.cpl === null || b.cpl === null)) {
+        return a.cpl === b.cpl ? 0 : a.cpl === null ? 1 : -1;
+      }
+
       let valueA = a[sortField];
       let valueB = b[sortField];
 
       // Para ordenação alfabética (nome)
       if (sortField === 'name') {
-        valueA = valueA.toString().toLowerCase();
-        valueB = valueB.toString().toLowerCase();
+        valueA = (valueA ?? '').toString().toLowerCase();
+        valueB = (valueB ?? '').toString().toLowerCase();
 
         if (sortDirection === 'asc') {
           return valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
@@ -350,6 +370,12 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
                   <col style={{ width: '100px' }} />
                   <col style={{ width: '110px' }} />
                   <col style={{ width: '100px' }} />
+                  {mostrarLeads && (
+                    <>
+                      <col style={{ width: '90px' }} />
+                      <col style={{ width: '120px' }} />
+                    </>
+                  )}
                 </colgroup>
                 <thead className="sticky top-0 bg-gray-50 z-10">
                   <tr className="border-b border-gray-200">
@@ -365,7 +391,7 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
                     <SortableHeader field="taxaEngajamento">Tx. Eng.</SortableHeader>
                     <th
                       onClick={() => handleSort('ctr')}
-                      className="text-center py-3 px-4 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                      className={`text-center py-3 px-4 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${mostrarLeads ? 'border-r border-gray-200' : ''}`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span>CTR</span>
@@ -382,6 +408,30 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
                         </span>
                       </div>
                     </th>
+                    {mostrarLeads && (
+                      <>
+                        <SortableHeader field="leads">Leads</SortableHeader>
+                        <th
+                          onClick={() => handleSort('cpl')}
+                          className="text-center py-3 px-4 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                        >
+                          <div className="flex items-center justify-center gap-1">
+                            <span>CPL</span>
+                            <span className="text-xs">
+                              {sortField === 'cpl' ? (
+                                sortDirection === 'asc' ? (
+                                  <span className="text-blue-600">▲</span>
+                                ) : (
+                                  <span className="text-blue-600">▼</span>
+                                )
+                              ) : (
+                                <span className="text-gray-300">▼</span>
+                              )}
+                            </span>
+                          </div>
+                        </th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -490,7 +540,7 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
                           })()}
                         </div>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className={`py-3 px-4 ${mostrarLeads ? 'border-r border-gray-200' : ''}`}>
                         <div className="flex items-center justify-center">
                           {(() => {
                             // Não mostra comparação se a métrica estiver zerada
@@ -519,6 +569,35 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
                           })()}
                         </div>
                       </td>
+                      {mostrarLeads && (
+                        <>
+                          <td className="py-3 px-4 text-center border-r border-gray-200">
+                            {(() => {
+                              // O GA4 não separa Facebook de Instagram: filtrando um só deles, os
+                              // leads do Meta são repartidos pelos cliques e podem ficar fracionados
+                              const inteiro = Math.abs(creative.leads - Math.round(creative.leads)) < 0.05;
+                              if (creative.leads <= 0) return <span className="text-gray-400">0</span>;
+                              return inteiro ? (
+                                <span className="font-semibold text-[#153ece]">{Math.round(creative.leads)}</span>
+                              ) : (
+                                <span
+                                  className="font-semibold text-[#153ece] cursor-help"
+                                  title="Estimado: o GA4 não separa Facebook de Instagram, então os leads do Meta foram repartidos pelos cliques"
+                                >
+                                  ≈{creative.leads.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            {creative.cpl !== null ? (
+                              <span className="font-medium text-gray-700">{formatCurrency(creative.cpl)}</span>
+                            ) : (
+                              <span className="text-gray-400">R$ -</span>
+                            )}
+                          </td>
+                        </>
+                      )}
                     </tr>
                     );
                   })}
