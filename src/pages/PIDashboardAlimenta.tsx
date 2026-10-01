@@ -197,6 +197,8 @@ const PIDashboardAlimentaContent = ({
       leads,
       cpl: leads > 0 ? resumoBonificacao.realizado / leads : 0,
       carregando: carregandoPIeLP,
+      investimentoBase: resumoBonificacao.realizado,
+      bonificacao: resumoBonificacao.bonificacao,
     };
   }, [ga4, resumoBonificacao, carregandoPIeLP]);
 
