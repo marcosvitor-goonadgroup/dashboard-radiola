@@ -223,8 +223,9 @@ const PIDashboardAlimentaContent = ({
   const previousPeriodMetrics = useMemo(() => {
     if (periodFilter !== '7days') return null;
     const fourteenDaysAgo = startOfDay(subDays(maxAvailableDate, 14));
-    const prev = piData.filter(i => i.date >= fourteenDaysAgo && i.date < sevenDaysAgoFromMaxDate);
-    const totalInv = prev.reduce((s, i) => s + i.cost, 0);
+    const prev = piDataComLeads.filter(i => i.date >= fourteenDaysAgo && i.date < sevenDaysAgoFromMaxDate);
+    // Mesmo critério do período atual: investimento travado no teto
+    const totalInv = prev.reduce((s, i) => s + (i.custoCobrado ?? i.cost), 0);
     const totalImp = prev.reduce((s, i) => s + i.impressions, 0);
     const totalClk = prev.reduce((s, i) => s + i.clicks, 0);
     const totalVid = prev.reduce((s, i) => s + i.videoViews, 0);
@@ -241,10 +242,13 @@ const PIDashboardAlimentaContent = ({
       vtr: totalImp > 0 ? (totalVidC / totalImp) * 100 : 0,
       taxaEngajamento: totalImp > 0 ? (totalEng / totalImp) * 100 : 0,
     };
-  }, [piData, periodFilter, maxAvailableDate, sevenDaysAgoFromMaxDate]);
+  }, [piDataComLeads, periodFilter, maxAvailableDate, sevenDaysAgoFromMaxDate]);
 
+  // O card de investimento mostra o realizado (até o teto contratado) e a bonificação
+  // separados. Num recorte de período ou veículo, o teto se divide na proporção do que
+  // cada linha veiculou — o mesmo critério do CPL dos criativos.
   const displayMetrics = useMemo(() => {
-    const totalInv = displayData.reduce((s, i) => s + i.cost, 0);
+    const totalInv = displayData.reduce((s, i) => s + (i.custoCobrado ?? i.cost), 0);
     const totalInvR = displayData.reduce((s, i) => s + (i.realInvestment || 0), 0);
     const totalImp = displayData.reduce((s, i) => s + i.impressions, 0);
     const totalClk = displayData.reduce((s, i) => s + i.clicks, 0);
@@ -263,6 +267,11 @@ const PIDashboardAlimentaContent = ({
       taxaEngajamento: totalImp > 0 ? (totalEng / totalImp) * 100 : 0,
     };
   }, [displayData]);
+
+  const investimentoBonificado = useMemo(
+    () => displayData.reduce((s, i) => s + i.cost - (i.custoCobrado ?? i.cost), 0),
+    [displayData]
+  );
 
   if (loading) {
     return (
@@ -348,6 +357,7 @@ const PIDashboardAlimentaContent = ({
                 previousPeriodMetrics={previousPeriodMetrics}
                 selectedPI={piSlug}
                 lpMetrics={lpMetrics}
+                investimentoBonificado={investimentoBonificado}
               />
             </div>
 

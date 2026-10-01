@@ -26,6 +26,12 @@ interface BigNumbersProps {
     /** Excedente bonificado que ficou fora do CPL, explicado no tooltip */
     bonificacao?: number;
   } | null;
+  /**
+   * Excedente veiculado além do teto contratado. Quando informado, `metrics.investimento`
+   * deve vir já travado no teto: o card passa a se chamar "Investimento realizado" e
+   * mostra a bonificação separada, para ninguém somar as duas coisas.
+   */
+  investimentoBonificado?: number;
 }
 
 const formatNumber = (num: number): string => {
@@ -53,7 +59,8 @@ const BigNumbers = ({
   comparisonMode = 'benchmark',
   previousPeriodMetrics,
   selectedPI,
-  lpMetrics
+  lpMetrics,
+  investimentoBonificado
 }: BigNumbersProps) => {
   // Detecta se há filtros ativos
   const hasActiveFilters = () => {
@@ -108,15 +115,17 @@ const BigNumbers = ({
   const cliquesComparison = getComparisonData(metrics.cliques, 'cliques');
   const ctrComparison = getComparisonData(metrics.ctr, 'ctr');
 
-  // Sempre usa o gasto real (cost) reportado na planilha
+  // Sempre usa o gasto real (cost) reportado na planilha — ou, com bonificação,
+  // o gasto já travado no teto contratado
   const displayInvestment = metrics.investimento;
+  const comBonificacao = investimentoBonificado !== undefined;
 
   return (
     <div className={`grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 ${lpMetrics ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
       {/* Investimento - usando valor real */}
       <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
         <p className="text-[10px] sm:text-xs font-medium text-gray-500 mb-1">
-          Investimento
+          {comBonificacao ? 'Investimento realizado' : 'Investimento'}
         </p>
         <p className="text-base sm:text-2xl font-bold text-blue-900 leading-tight">
           <AnimatedNumber
@@ -135,6 +144,17 @@ const BigNumbers = ({
               hidePercentageDiff={investimentoComparison.hidePercentageDiff}
               compactMode={true}
             />
+          </div>
+        )}
+        {comBonificacao && investimentoBonificado! > 0 && (
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            <p className="text-xs text-amber-700 mb-1">Bonificação</p>
+            <p className="text-sm font-bold text-amber-700">
+              {formatCurrency(investimentoBonificado!)}
+            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">
+              Entregue além do contratado, sem custo
+            </p>
           </div>
         )}
       </div>
