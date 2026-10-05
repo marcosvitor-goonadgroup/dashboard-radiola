@@ -440,8 +440,22 @@ const DashboardContent = () => {
  * olhinho já existentes continuam valendo. Todo PI fora desta lista segue no
  * PIDashboard de sempre.
  */
+// ALIMENTA 2026: um PI por mês, todos com o mesmo utm no GA4 — o mês separa um do outro
+const ALIMENTA_SETEMBRO = { inicio: '2026-09-01', fim: '2026-09-30', rotulo: 'set/2026' };
+const ALIMENTA_OUTUBRO = { inicio: '2026-10-01', fim: '2026-10-31', rotulo: 'out/2026' };
+
 const PIS_COM_DASHBOARD_PROPRIO: Record<string, (p: { clientSlug: string; campaignSlug: string; piSlug: string }) => JSX.Element> = {
-  'sebrae/alimenta-2026/1952': props => <PIDashboardAlimenta {...props} campanhaGA4="alimenta" />
+  'sebrae/alimenta-2026/1952': props => (
+    <PIDashboardAlimenta {...props} campanhaGA4="alimenta" periodoLP={ALIMENTA_SETEMBRO} />
+  ),
+  'sebrae/alimenta-2026/1953': props => (
+    <PIDashboardAlimenta
+      {...props}
+      campanhaGA4="alimenta"
+      periodoLP={ALIMENTA_OUTUBRO}
+      comparativo={{ piSlug: '1952', periodoLP: ALIMENTA_SETEMBRO }}
+    />
+  )
 };
 
 function App() {

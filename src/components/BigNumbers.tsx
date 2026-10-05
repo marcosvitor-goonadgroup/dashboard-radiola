@@ -25,6 +25,18 @@ interface BigNumbersProps {
     investimentoBase?: number;
     /** Excedente bonificado que ficou fora do CPL, explicado no tooltip */
     bonificacao?: number;
+    /** Período fechado a que sessões e leads se referem, ex: "out/2026" */
+    rotuloPeriodo?: string;
+    /** Mesmas métricas no período do PI anterior, para comparação */
+    comparativo?: {
+      piSlug: string;
+      rotulo: string;
+      carregando?: boolean;
+      sessoes: number;
+      leads: number;
+      cpl: number;
+      investimentoBase: number;
+    };
   } | null;
   /**
    * Excedente veiculado além do teto contratado. Quando informado, `metrics.investimento`
@@ -49,6 +61,45 @@ const formatCurrency = (num: number): string => {
     style: 'currency',
     currency: 'BRL'
   }).format(num);
+};
+
+/** Variação contra o período anterior, no formato dos outros cards: "↓ 12% (set/2026: 1.4 mil)" */
+const LinhaComparativo = ({
+  atual,
+  anterior,
+  rotulo,
+  formatar,
+  carregando = false,
+  menorEhMelhor = false,
+}: {
+  atual: number;
+  anterior: number;
+  rotulo: string;
+  formatar: (n: number) => string;
+  carregando?: boolean;
+  menorEhMelhor?: boolean;
+}) => {
+  if (carregando) {
+    return <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">({rotulo}: —)</p>;
+  }
+
+  // Sem base no período anterior (ou sem valor atual, ex: CPL sem lead) não há variação a mostrar
+  const temVariacao = anterior > 0 && atual > 0;
+  const variacao = temVariacao ? ((atual - anterior) / anterior) * 100 : 0;
+  const melhorou = menorEhMelhor ? variacao < 0 : variacao > 0;
+  const cor = Math.abs(variacao) < 0.5 ? 'text-gray-500' : melhorou ? 'text-green-600' : 'text-red-600';
+  const seta = variacao >= 0.5 ? '↑' : variacao <= -0.5 ? '↓' : '=';
+
+  return (
+    <p className="text-[10px] sm:text-xs mt-0.5 flex items-center gap-1 flex-wrap">
+      {temVariacao && (
+        <span className={`font-semibold ${cor}`}>
+          {seta} {Math.abs(variacao).toFixed(0)}%
+        </span>
+      )}
+      <span className="text-gray-500">({rotulo}: {anterior > 0 ? formatar(anterior) : '—'})</span>
+    </p>
+  );
 };
 
 const BigNumbers = ({
@@ -318,63 +369,89 @@ const BigNumbers = ({
       </div>
 
       {/* Landing page: sessões, leads e CPL vindos do GA4 */}
-      {lpMetrics && (
-        <div className="bg-white rounded-lg border border-[#153ece]/30 p-3 sm:p-4">
-          <p className="text-[10px] sm:text-xs font-medium text-gray-500 mb-1">
-            Sessões <span className="text-gray-400 font-normal">LP</span>
-          </p>
-          <p className="text-base sm:text-2xl font-bold text-[#153ece] leading-tight">
-            {lpMetrics.carregando ? (
-              <span className="text-gray-300">—</span>
-            ) : (
-              <AnimatedNumber value={lpMetrics.sessoes} formatter={formatNumber} duration={2000} />
-            )}
-          </p>
-          <div className="mt-2 pt-2 border-t border-gray-100">
-            <p className="text-xs text-gray-500 mb-1">Leads gerados</p>
-            <p className="text-sm font-bold text-gray-800">
-              {lpMetrics.carregando ? '—' : formatNumber(lpMetrics.leads)}
+      {lpMetrics && (() => {
+        const anterior = lpMetrics.comparativo;
+        const formatInteiro = (n: number) => new Intl.NumberFormat('pt-BR').format(n);
+        const temConta =
+          !lpMetrics.carregando && lpMetrics.leads > 0 && lpMetrics.investimentoBase !== undefined;
+        const valorCPL = lpMetrics.carregando || lpMetrics.leads === 0 ? '—' : formatCurrency(lpMetrics.cpl);
+        const bonificacao = lpMetrics.bonificacao ?? 0;
+
+        return (
+          <div className="bg-white rounded-lg border border-[#153ece]/30 p-3 sm:p-4">
+            <p className="text-[10px] sm:text-xs font-medium text-gray-500 mb-1">
+              Sessões <span className="text-gray-400 font-normal">LP{lpMetrics.rotuloPeriodo ? ` · ${lpMetrics.rotuloPeriodo}` : ''}</span>
             </p>
-          </div>
-          {(() => {
-            const temConta =
-              !lpMetrics.carregando && lpMetrics.leads > 0 && lpMetrics.investimentoBase !== undefined;
-            const valorCPL = lpMetrics.carregando || lpMetrics.leads === 0 ? '—' : formatCurrency(lpMetrics.cpl);
+            <p className="text-base sm:text-2xl font-bold text-[#153ece] leading-tight">
+              {lpMetrics.carregando ? (
+                <span className="text-gray-300">—</span>
+              ) : (
+                <AnimatedNumber value={lpMetrics.sessoes} formatter={formatNumber} duration={2000} />
+              )}
+            </p>
+            {anterior && (
+              <LinhaComparativo
+                atual={lpMetrics.carregando ? 0 : lpMetrics.sessoes}
+                anterior={anterior.sessoes}
+                rotulo={anterior.rotulo}
+                formatar={formatNumber}
+                carregando={anterior.carregando}
+              />
+            )}
 
-            if (!temConta) {
-              return (
-                <div className="mt-2 pt-2 border-t border-gray-100">
-                  <p className="text-xs text-gray-500 mb-1">CPL</p>
-                  <p className="text-sm font-bold text-gray-800">{valorCPL}</p>
-                </div>
-              );
-            }
+            <div className="mt-2 pt-2 border-t border-gray-100">
+              <p className="text-xs text-gray-500 mb-1">Leads gerados</p>
+              <p className="text-sm font-bold text-gray-800">
+                {lpMetrics.carregando ? '—' : formatNumber(lpMetrics.leads)}
+              </p>
+              {anterior && (
+                <LinhaComparativo
+                  atual={lpMetrics.carregando ? 0 : lpMetrics.leads}
+                  anterior={anterior.leads}
+                  rotulo={anterior.rotulo}
+                  formatar={formatInteiro}
+                  carregando={anterior.carregando}
+                />
+              )}
+            </div>
 
-            const bonificacao = lpMetrics.bonificacao ?? 0;
-
-            return (
-              // tabIndex: no celular não há hover, o toque foca o bloco e abre o tooltip
-              <div
-                tabIndex={0}
-                className="group relative mt-2 pt-2 border-t border-gray-100 cursor-help outline-none"
-                aria-describedby="lp-cpl-calculo"
-              >
-                <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-                  CPL
+            {/* tabIndex: no celular não há hover, o toque foca o bloco e abre o tooltip */}
+            <div
+              tabIndex={temConta ? 0 : undefined}
+              className={`group relative mt-2 pt-2 border-t border-gray-100 outline-none ${temConta ? 'cursor-help' : ''}`}
+              aria-describedby={temConta ? 'lp-cpl-calculo' : undefined}
+            >
+              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                CPL
+                {temConta && (
                   <svg className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#153ece] group-focus:text-[#153ece] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                </p>
-                <p className="text-sm font-bold text-gray-800 underline decoration-dotted decoration-gray-300 underline-offset-4">
-                  {valorCPL}
-                </p>
+                )}
+              </p>
+              <p className={`text-sm font-bold text-gray-800 ${temConta ? 'underline decoration-dotted decoration-gray-300 underline-offset-4' : ''}`}>
+                {valorCPL}
+              </p>
+              {anterior && (
+                <LinhaComparativo
+                  atual={temConta ? lpMetrics.cpl : 0}
+                  anterior={anterior.leads > 0 ? anterior.cpl : 0}
+                  rotulo={anterior.rotulo}
+                  formatar={formatCurrency}
+                  carregando={anterior.carregando}
+                  menorEhMelhor
+                />
+              )}
 
+              {temConta && (
                 <div
                   id="lp-cpl-calculo"
                   role="tooltip"
                   className="invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100 transition-opacity duration-150 absolute right-0 bottom-full mb-2 z-30 w-72 max-w-[calc(100vw-2rem)] rounded-lg bg-gray-900 text-white text-xs p-3 shadow-xl"
                 >
-                  <p className="font-semibold mb-2">Como este CPL é calculado</p>
+                  <p className="font-semibold mb-2">
+                    Como este CPL é calculado{lpMetrics.rotuloPeriodo ? ` (${lpMetrics.rotuloPeriodo})` : ''}
+                  </p>
 
                   <div className="space-y-1">
                     <div className="flex justify-between gap-3">
@@ -383,9 +460,7 @@ const BigNumbers = ({
                     </div>
                     <div className="flex justify-between gap-3">
                       <span className="text-gray-300">÷ Leads gerados</span>
-                      <span className="font-semibold tabular-nums">
-                        {new Intl.NumberFormat('pt-BR').format(lpMetrics.leads)}
-                      </span>
+                      <span className="font-semibold tabular-nums">{formatInteiro(lpMetrics.leads)}</span>
                     </div>
                     <div className="flex justify-between gap-3 pt-1 mt-1 border-t border-white/20">
                       <span className="text-gray-300">= CPL</span>
@@ -393,22 +468,33 @@ const BigNumbers = ({
                     </div>
                   </div>
 
+                  {anterior && !anterior.carregando && anterior.leads > 0 && (
+                    <div className="mt-2 pt-2 border-t border-white/20">
+                      <p className="text-gray-300 mb-1">Comparativo: {anterior.rotulo} (PI {anterior.piSlug})</p>
+                      <p className="tabular-nums">
+                        {formatCurrency(anterior.investimentoBase)} ÷ {formatInteiro(anterior.leads)} ={' '}
+                        <span className="font-bold">{formatCurrency(anterior.cpl)}</span>
+                      </p>
+                    </div>
+                  )}
+
                   <p className="mt-2 pt-2 border-t border-white/20 text-gray-300 leading-relaxed">
                     O investimento é o realizado até o teto contratado do PI.
                     {bonificacao > 0 && (
                       <> Os {formatCurrency(bonificacao)} veiculados além do contratado são bonificação e não entram na conta.</>
                     )}
-                    {' '}Leads são as inscrições concluídas na landing page (GA4) em todo o período do PI.
+                    {' '}Leads são as inscrições concluídas na landing page (GA4)
+                    {lpMetrics.rotuloPeriodo ? ` em ${lpMetrics.rotuloPeriodo}` : ' em todo o período do PI'}.
                   </p>
 
                   {/* Seta apontando para o CPL */}
                   <span className="absolute -bottom-1 right-6 w-2 h-2 rotate-45 bg-gray-900" />
                 </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

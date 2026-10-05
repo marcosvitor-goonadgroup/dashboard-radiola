@@ -48,6 +48,12 @@ export interface GA4Resumo {
 
 export const GA4_RESUMO_VAZIO: GA4Resumo = { sessoes: 0, leads: 0, fontes: [], porDia: [], porCriativo: [] };
 
+/** Janela de datas fechada, no formato da planilha ("yyyy-MM-dd"), inclusive nas pontas */
+export interface PeriodoGA4 {
+  inicio: string;
+  fim: string;
+}
+
 const parseNumero = (valor: string): number => {
   if (!valor) return 0;
   const limpo = valor.replace(/\./g, '').replace(',', '.').trim();
@@ -101,6 +107,12 @@ export const GRUPOS_VEICULO: GrupoVeiculo[] = [
     nomesPI: ['google ads', 'google'],
     aceitaFonte: (source, medium) => source === 'google' && medium === 'cpc',
   },
+  {
+    chave: 'tiktok',
+    veiculosMidia: ['tiktok'],
+    nomesPI: ['tik tok', 'tiktok'],
+    aceitaFonte: source => source === 'tiktok',
+  },
 ];
 
 export const grupoDaFonte = (sourceMedium: string): GrupoVeiculo | undefined =>
@@ -137,23 +149,52 @@ export const metricasDoVeiculoPI = (
 };
 
 /**
+ * A mesma campanha aparece no GA4 com variações de utm_campaign: "alimenta" para
+ * social/display e "alimenta_2026_search" para os sitelinks da busca. Todas as
+ * que começam com o nome base pertencem à campanha.
+ */
+const ehDaCampanha = (nome: string, base: string): boolean => {
+  const n = nome.trim().toLowerCase();
+  return n === base || n.startsWith(`${base}_`) || n.startsWith(`${base}-`);
+};
+
+// Páginas com comparativo leem a aba duas vezes (período atual e anterior): uma requisição basta
+let linhasEmCache: Promise<string[][]> | null = null;
+
+const buscarLinhasGA4 = (): Promise<string[][]> => {
+  if (!linhasEmCache) {
+    linhasEmCache = axios.get<ApiResponse>(GA4_SEBRAE_URL).then(response => {
+      if (!response.data.success || !response.data.data.values || response.data.data.values.length <= 1) {
+        return [];
+      }
+      return response.data.data.values.slice(1);
+    });
+    linhasEmCache.catch(() => { linhasEmCache = null; });
+  }
+  return linhasEmCache;
+};
+
+/**
  * A aba GA4 vem quebrada por Data × Campanha × Evento × Origem × Criativo, e a
  * coluna "Sessions" repete o total daquele recorte em cada linha de evento.
  * Somar a coluna direto multiplicaria as sessões pelo número de eventos, então
  * as sessões saem do Event count do session_start.
+ *
+ * `periodo` fecha a leitura numa janela de datas — campanhas que se estendem por
+ * mais de um PI usam o mesmo utm_campaign, e é o mês que separa um PI do outro.
  */
-export const fetchGA4Resumo = async (campanhaGA4: string): Promise<GA4Resumo> => {
+export const fetchGA4Resumo = async (campanhaGA4: string, periodo?: PeriodoGA4): Promise<GA4Resumo> => {
   try {
-    const response = await axios.get<ApiResponse>(GA4_SEBRAE_URL);
+    const todas = await buscarLinhasGA4();
+    if (todas.length === 0) return GA4_RESUMO_VAZIO;
 
-    if (!response.data.success || !response.data.data.values || response.data.data.values.length <= 1) {
-      return GA4_RESUMO_VAZIO;
-    }
-
-    const alvo = campanhaGA4.trim().toLowerCase();
-    const linhas = response.data.data.values
-      .slice(1)
-      .filter(row => row.length >= 6 && (row[2] || '').trim().toLowerCase() === alvo);
+    const base = campanhaGA4.trim().toLowerCase();
+    const linhas = todas.filter(row => {
+      if (row.length < 6 || !ehDaCampanha(row[2] || '', base)) return false;
+      // Datas "yyyy-MM-dd" comparam corretamente como texto
+      if (periodo && (row[0] < periodo.inicio || row[0] > periodo.fim)) return false;
+      return true;
+    });
 
     // Agrupa por dia + origem + criativo: cada recorte tem um session_start próprio.
     // Planilhas antigas sem a coluna de criativo caem todas em "(not set)".

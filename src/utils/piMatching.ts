@@ -67,7 +67,16 @@ export interface VeiculacaoPI {
   impressoesRealizadas: number;
   cliquesRealizados: number;
   matchedByVehicle: boolean;
+  /**
+   * Chaves "veículo|tipo de compra" (normalizadas) dos dados realizados que esta
+   * linha absorveu — permite levar o teto de volta a cada linha de mídia
+   */
+  chavesRealizado: string[];
 }
+
+/** Chave com que os dados realizados são agrupados e cruzados com o PI */
+export const chaveRealizado = (item: ProcessedCampaignData): string =>
+  `${normalizeVehicleName(item.veiculo)}|${item.tipoDeCompra.toUpperCase()}`;
 
 export const calcularTotaisRealizados = (
   campaignData: ProcessedCampaignData[]
@@ -114,7 +123,7 @@ export const agruparVeiculacaoPI = (
   // Agrupa realizados por veículo+tipo da campanha
   const realizadoGrouped = new Map<string, { realizado: number; cliques: number; impressoes: number }>();
   campaignData.forEach(item => {
-    const key = `${normalizeVehicleName(item.veiculo)}|${item.tipoDeCompra.toUpperCase()}`;
+    const key = chaveRealizado(item);
     if (realizadoGrouped.has(key)) {
       const e = realizadoGrouped.get(key)!;
       e.realizado += item.cost;
@@ -137,16 +146,17 @@ export const agruparVeiculacaoPI = (
   piGrouped.forEach(p => resolveVehicleNames(p.veiculo).forEach(n => veiculosDoPI.add(n)));
 
   const somaRealizados = (aceita: (veiculo: string) => boolean, tipoKey: string) => {
-    let realizado = 0, cliques = 0, impressoes = 0, found = false;
+    let realizado = 0, cliques = 0, impressoes = 0;
+    const chaves: string[] = [];
     for (const [k, v] of realizadoGrouped.entries()) {
       const { veiculo, tipo } = splitKey(k);
       if (tipo !== tipoKey || !aceita(veiculo)) continue;
       realizado += v.realizado;
       cliques += v.cliques;
       impressoes += v.impressoes;
-      found = true;
+      chaves.push(k);
     }
-    return found ? { realizado, cliques, impressoes } : undefined;
+    return chaves.length > 0 ? { realizado, cliques, impressoes, chaves } : undefined;
   };
 
   piGrouped.forEach((piData) => {
@@ -165,7 +175,12 @@ export const agruparVeiculacaoPI = (
     }
 
     if (!match && piGrouped.size === 1) {
-      match = { realizado: totaisRealizados.realizado, cliques: totaisRealizados.cliques, impressoes: totaisRealizados.impressoes };
+      match = {
+        realizado: totaisRealizados.realizado,
+        cliques: totaisRealizados.cliques,
+        impressoes: totaisRealizados.impressoes,
+        chaves: Array.from(realizadoGrouped.keys()),
+      };
     }
 
     resultado.push({
@@ -177,6 +192,7 @@ export const agruparVeiculacaoPI = (
       impressoesRealizadas: match?.impressoes ?? 0,
       cliquesRealizados: match?.cliques ?? 0,
       matchedByVehicle,
+      chavesRealizado: match?.chaves ?? [],
     });
   });
 

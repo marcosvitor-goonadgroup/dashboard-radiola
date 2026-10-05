@@ -5,32 +5,49 @@ import {
   GrupoVeiculo,
   grupoDaFonte,
   grupoDoVeiculoMidia,
-  grupoDoVeiculoPI,
 } from '../services/ga4';
-import { VeiculacaoBonificada } from './piMatching';
+import { chaveRealizado, VeiculacaoBonificada } from './piMatching';
 
 /**
  * Cruzamento dos leads da landing page (GA4) com os criativos da planilha de mídia.
  *
- * O GA4 identifica o criativo pelo utm_content ("um-encontro"); a mídia, pelo nome
- * na taxonomia "formato_tipo_dim_x_na_<criativo>_na". Os nomes nem sempre são
- * idênticos ("teaser" na mídia vira "video-teaser" no GA4), então o casamento é
- * por palavra inteira. Anúncios de busca não têm criativo: o utm_content deles
- * ("pesquisa") casa com um trecho do nome da campanha.
+ * O GA4 identifica o criativo pelo utm_content ("video-cesar-domingos"); a mídia,
+ * pelo nome na taxonomia "formato_tipo_dim_x_na_<criativo>_na". Os nomes nem sempre
+ * são idênticos ("teaser" na mídia vira "video-teaser" no GA4), então o casamento é
+ * por palavra inteira, e o formato ("video", "banner") desempata quando o mesmo
+ * criativo roda nos dois. Anúncios de busca não têm criativo: o utm_content deles
+ * ("pesquisa") casa com um trecho do nome da campanha, e sitelinks — que só existem
+ * na busca — vão para ela também.
  *
  * O cruzamento respeita o veículo — leads vindos de "meta / paid" só vão para
  * linhas de Facebook/Instagram — e o dia, para o filtro de período continuar certo.
  */
 
-// Posição do nome do criativo na taxonomia "formato_tipo_dim_x_na_<criativo>_na"
+// Posições na taxonomia "formato_tipo_dim_x_na_<criativo>_na"
+const POSICAO_FORMATO = 0;
 const POSICAO_CRIATIVO = 5;
 
-export const slugDoCriativo = (adName: string): string | null => {
-  const nome = adName.trim().toLowerCase();
-  if (!nome) return null;
-  const partes = nome.split('_');
-  return partes.length > POSICAO_CRIATIVO && partes[POSICAO_CRIATIVO] ? partes[POSICAO_CRIATIVO] : nome;
+// Minúsculo e sem acento: "iório" no GA4 e na mídia nem sempre chegam com a mesma grafia
+const normalizar = (texto: string): string =>
+  texto
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const partesDaTaxonomia = (adName: string): string[] | null => {
+  const partes = normalizar(adName).split('_');
+  return partes.length > POSICAO_CRIATIVO && partes[POSICAO_CRIATIVO] ? partes : null;
 };
+
+export const slugDoCriativo = (adName: string): string | null => {
+  const nome = normalizar(adName);
+  if (!nome) return null;
+  return partesDaTaxonomia(adName)?.[POSICAO_CRIATIVO] ?? nome;
+};
+
+const formatoDoCriativo = (adName: string): string | null =>
+  partesDaTaxonomia(adName)?.[POSICAO_FORMATO] ?? null;
 
 const entreHifens = (s: string) => `-${s}-`;
 
@@ -58,45 +75,57 @@ interface Identidade {
   chave: string;
   rotulo: string;
   pontos: number;
+  /** Tamanho do trecho que casou — no empate, o nome mais específico vence */
+  especificidade: number;
 }
+
+/** Cada nome de criativo é uma linha na tabela; anúncios de busca se agrupam pela campanha */
+const chaveDaIdentidade = (item: ProcessedCampaignData): string =>
+  item.adName.trim() ? `criativo:${normalizar(item.adName)}` : `campanha:${item.campaignName}`;
 
 /** Melhor identidade de mídia para um utm_content, entre os itens de um grupo de veículo */
 const melhorIdentidade = (adContent: string, itens: ProcessedCampaignData[]): Identidade | null => {
-  const alvo = adContent.trim().toLowerCase();
+  const alvo = normalizar(adContent);
+  const palavrasDoAlvo = alvo.split('-');
   let melhor: Identidade | null = null;
 
   for (const item of itens) {
-    const slug = slugDoCriativo(item.adName);
+    const slug = item.adName.trim() ? slugDoCriativo(item.adName) : null;
     let candidata: Identidade | null = null;
 
     if (slug) {
       const pontos = pontuarCriativo(alvo, slug);
-      if (pontos > 0) candidata = { chave: `criativo:${slug}`, rotulo: item.adName, pontos };
+      if (pontos > 0) {
+        // "video-cesar-domingos" prefere o vídeo ao banner do mesmo criativo
+        const formato = formatoDoCriativo(item.adName);
+        const bonusFormato = formato && palavrasDoAlvo.includes(formato) ? 1 : 0;
+        candidata = {
+          chave: chaveDaIdentidade(item),
+          rotulo: item.adName,
+          pontos: pontos + bonusFormato,
+          especificidade: slug.length,
+        };
+      }
     } else {
       // Busca: sem criativo, o utm_content aparece como um trecho do nome da campanha
-      const trechos = item.campaignName.trim().toLowerCase().split('_');
-      if (trechos.includes(alvo)) {
-        candidata = { chave: `campanha:${item.campaignName}`, rotulo: item.campaignName, pontos: 1 };
+      // ("pesquisa"), ou é um sitelink, extensão que só existe em anúncio de busca
+      const trechos = normalizar(item.campaignName).split('_');
+      if (trechos.includes(alvo) || alvo.startsWith('sitelink')) {
+        candidata = { chave: chaveDaIdentidade(item), rotulo: item.campaignName, pontos: 1, especificidade: 0 };
       }
     }
 
     if (!candidata) continue;
-    // Mais pontos vence; no empate, o nome mais específico (mais longo)
     if (
       !melhor ||
       candidata.pontos > melhor.pontos ||
-      (candidata.pontos === melhor.pontos && candidata.chave.length > melhor.chave.length)
+      (candidata.pontos === melhor.pontos && candidata.especificidade > melhor.especificidade)
     ) {
       melhor = candidata;
     }
   }
 
   return melhor;
-};
-
-const chaveDaIdentidade = (item: ProcessedCampaignData): string => {
-  const slug = slugDoCriativo(item.adName);
-  return slug ? `criativo:${slug}` : `campanha:${item.campaignName}`;
 };
 
 /** Reparte um total entre itens, na proporção dos cliques (ou impressões, ou igualmente) */
@@ -178,31 +207,31 @@ export const atribuirLeadsAosCriativos = (
 };
 
 /**
- * Custo de cada linha depois do teto de bonificação: cada veículo do PI é cobrado
- * até o contratado, e esse desconto se espalha proporcionalmente pelos criativos.
+ * Custo de cada linha depois do teto de bonificação: cada linha do PI é cobrada
+ * até o contratado, e esse desconto se espalha proporcionalmente pelas linhas de
+ * mídia que ela absorveu. Mídia que não casou com nenhuma linha do PI não tem
+ * contrato que a cubra — sai como bonificação, como no card do PI.
  */
 export const aplicarTetoAosItens = (
   dados: ProcessedCampaignData[],
   linhasBonificadas: VeiculacaoBonificada[]
 ): ProcessedCampaignData[] => {
-  const fatores = new Map<GrupoVeiculo, number>();
+  // Sem linhas do PI (ainda carregando, ou PI fora da planilha) não há teto conhecido
+  if (linhasBonificadas.length === 0) {
+    return dados.map(item => ({ ...item, custoCobrado: item.cost }));
+  }
 
-  const somaPorGrupo = new Map<GrupoVeiculo, { cobrado: number; veiculado: number }>();
+  // Fração cobrada de cada chave "veículo|tipo"; a primeira linha do PI que a absorveu vale
+  const fatorPorChave = new Map<string, number>();
   linhasBonificadas.forEach(linha => {
-    const grupo = grupoDoVeiculoPI(linha.veiculo);
-    if (!grupo) return;
-    const soma = somaPorGrupo.get(grupo) ?? { cobrado: 0, veiculado: 0 };
-    soma.cobrado += linha.realizadoConsiderado;
-    soma.veiculado += linha.realizado;
-    somaPorGrupo.set(grupo, soma);
-  });
-  somaPorGrupo.forEach((soma, grupo) => {
-    fatores.set(grupo, soma.veiculado > 0 ? soma.cobrado / soma.veiculado : 1);
+    const fator = linha.realizado > 0 ? linha.realizadoConsiderado / linha.realizado : 1;
+    linha.chavesRealizado.forEach(chave => {
+      if (!fatorPorChave.has(chave)) fatorPorChave.set(chave, fator);
+    });
   });
 
-  return dados.map(item => {
-    const grupo = grupoDoVeiculoMidia(item.veiculo);
-    const fator = grupo ? fatores.get(grupo) ?? 1 : 1;
-    return { ...item, custoCobrado: item.cost * fator };
-  });
+  return dados.map(item => ({
+    ...item,
+    custoCobrado: item.cost * (fatorPorChave.get(chaveRealizado(item)) ?? 0),
+  }));
 };

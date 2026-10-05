@@ -1,6 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { CampaignProvider, useCampaign } from '../contexts/CampaignContext';
-import { PIInfo } from '../types/campaign';
 import BigNumbers from '../components/BigNumbers';
 import ImpressionsChart from '../components/ImpressionsChart';
 import VehicleMetrics from '../components/VehicleMetrics';
@@ -12,31 +11,42 @@ import Footer from '../components/Footer';
 import adDeskWhite from '../images/ad-desk-white.svg';
 import { subDays, startOfDay, format } from 'date-fns';
 import { toSlug } from '../utils/slug';
-import { fetchPIInfo } from '../services/api';
-import { fetchGA4Resumo, GA4Resumo } from '../services/ga4';
-import {
-  agruparVeiculacaoPI,
-  aplicarBonificacao,
-  calcularTotaisRealizados,
-} from '../utils/piMatching';
+import { PeriodoGA4 } from '../services/ga4';
+import { useLandingPagePI } from '../hooks/useLandingPagePI';
 import { aplicarTetoAosItens, atribuirLeadsAosCriativos } from '../utils/leadsCriativos';
 
 /**
- * Dashboard do PI 1952 (SEBRAE — ALIMENTA 2026).
+ * Dashboard dos PIs da campanha ALIMENTA 2026 (SEBRAE): 1952 em setembro, 1953 em outubro.
  *
- * Variante do PIDashboard com duas regras próprias desta campanha:
+ * Variante do PIDashboard com regras próprias desta campanha:
  *  - bonificação: o investimento contratado é teto, o excedente é entregue sem custo;
- *  - métricas da landing page (GA4): sessões, leads e CPL.
+ *  - métricas da landing page (GA4): sessões, leads e CPL, fechadas no mês do PI;
+ *  - comparativo opcional com o mês do PI anterior da mesma campanha.
  *
  * Os demais PIs continuam no PIDashboard padrão — ver o registro em App.tsx.
  */
 
-interface PIDashboardAlimentaProps {
+export interface PeriodoLP extends PeriodoGA4 {
+  /** Como o período aparece na tela, ex: "set/2026" */
+  rotulo: string;
+}
+
+export interface PIDashboardAlimentaProps {
   clientSlug: string;
   campaignSlug: string;
   piSlug: string;
-  /** Nome da campanha na aba GA4 (a planilha usa um rótulo curto, ex: "alimenta") */
+  /** Nome base da campanha na aba GA4 (a planilha usa um rótulo curto, ex: "alimenta") */
   campanhaGA4: string;
+  /**
+   * Janela do GA4 que pertence a este PI. A campanha usa o mesmo utm em todos os
+   * PIs, então é o mês que separa as sessões e leads de um PI do outro.
+   */
+  periodoLP: PeriodoLP;
+  /** PI anterior da mesma campanha, para comparar sessões, leads e CPL */
+  comparativo?: {
+    piSlug: string;
+    periodoLP: PeriodoLP;
+  };
 }
 
 const PIHeader = ({
@@ -78,6 +88,8 @@ const PIDashboardAlimentaContent = ({
   campaignSlug,
   piSlug,
   campanhaGA4,
+  periodoLP,
+  comparativo,
 }: PIDashboardAlimentaProps) => {
   const { loading, error, filteredData, data, agencia } = useCampaign();
 
@@ -85,33 +97,28 @@ const PIDashboardAlimentaContent = ({
   const [comparisonMode, setComparisonMode] = useState<'benchmark' | 'previous'>('benchmark');
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
 
-  const [piInfo, setPiInfo] = useState<PIInfo[] | null>(null);
-  const [ga4, setGa4] = useState<GA4Resumo | null>(null);
-  const [carregandoPIeLP, setCarregandoPIeLP] = useState(true);
+  // PI desta página (o PIInfoCard recebe as linhas prontas, em vez de buscá-las de novo)
+  const lp = useLandingPagePI({
+    dados: filteredData,
+    clientSlug,
+    campaignSlug,
+    piSlug,
+    campanhaGA4,
+    periodoGA4: periodoLP,
+  });
 
-  // PI e landing page são desta página (o PIInfoCard recebe as linhas prontas,
-  // em vez de buscá-las de novo)
-  useEffect(() => {
-    let ativo = true;
-    setCarregandoPIeLP(true);
+  // PI anterior, só para o comparativo da landing page
+  const lpAnterior = useLandingPagePI({
+    dados: data,
+    clientSlug,
+    campaignSlug,
+    piSlug: comparativo?.piSlug ?? null,
+    campanhaGA4,
+    periodoGA4: comparativo?.periodoLP ?? periodoLP,
+  });
 
-    Promise.all([fetchPIInfo(piSlug), fetchGA4Resumo(campanhaGA4)])
-      .then(([infoPI, resumoGA4]) => {
-        if (!ativo) return;
-        setPiInfo(infoPI);
-        setGa4(resumoGA4);
-      })
-      .catch(() => {
-        if (!ativo) return;
-        setPiInfo(null);
-        setGa4(null);
-      })
-      .finally(() => {
-        if (ativo) setCarregandoPIeLP(false);
-      });
-
-    return () => { ativo = false; };
-  }, [piSlug, campanhaGA4]);
+  const { piData, piInfo, ga4, resumoBonificacao } = lp;
+  const carregandoPIeLP = lp.carregando;
 
   const clientName = useMemo(() => {
     const found = data.find(d => toSlug(d.cliente || '') === clientSlug);
@@ -124,17 +131,6 @@ const PIDashboardAlimentaContent = ({
     );
     return found?.campanha || campaignSlug;
   }, [data, clientSlug, campaignSlug]);
-
-  const piData = useMemo(
-    () =>
-      filteredData.filter(
-        d =>
-          toSlug(d.cliente || '') === clientSlug &&
-          toSlug(d.campanha || '') === campaignSlug &&
-          d.numeroPi === piSlug
-      ),
-    [filteredData, clientSlug, campaignSlug, piSlug]
-  );
 
   const maxAvailableDate = useMemo(() => {
     if (piData.length === 0) return startOfDay(new Date());
@@ -183,24 +179,27 @@ const PIDashboardAlimentaContent = ({
     return map;
   }, [data]);
 
-  // Bonificação sobre o PI inteiro: o teto contratado não depende do filtro de período
-  const resumoBonificacao = useMemo(() => {
-    const totais = calcularTotaisRealizados(piData);
-    return aplicarBonificacao(agruparVeiculacaoPI(piInfo, piData, totais), totais);
-  }, [piInfo, piData]);
-
-  // CPL = investimento efetivamente cobrado (já travado no teto) ÷ leads da LP
-  const lpMetrics = useMemo(() => {
-    const leads = ga4?.leads ?? 0;
-    return {
-      sessoes: ga4?.sessoes ?? 0,
-      leads,
-      cpl: leads > 0 ? resumoBonificacao.realizado / leads : 0,
-      carregando: carregandoPIeLP,
-      investimentoBase: resumoBonificacao.realizado,
-      bonificacao: resumoBonificacao.bonificacao,
-    };
-  }, [ga4, resumoBonificacao, carregandoPIeLP]);
+  // CPL = investimento efetivamente cobrado (já travado no teto) ÷ leads da LP no mês do PI
+  const lpMetrics = useMemo(() => ({
+    sessoes: ga4?.sessoes ?? 0,
+    leads: ga4?.leads ?? 0,
+    cpl: lp.cpl,
+    carregando: carregandoPIeLP,
+    investimentoBase: resumoBonificacao.realizado,
+    bonificacao: resumoBonificacao.bonificacao,
+    rotuloPeriodo: periodoLP.rotulo,
+    comparativo: comparativo
+      ? {
+          piSlug: comparativo.piSlug,
+          rotulo: comparativo.periodoLP.rotulo,
+          carregando: lpAnterior.carregando,
+          sessoes: lpAnterior.ga4?.sessoes ?? 0,
+          leads: lpAnterior.ga4?.leads ?? 0,
+          cpl: lpAnterior.cpl,
+          investimentoBase: lpAnterior.resumoBonificacao.realizado,
+        }
+      : undefined,
+  }), [ga4, lp.cpl, carregandoPIeLP, resumoBonificacao, periodoLP.rotulo, comparativo, lpAnterior]);
 
   // Cada linha de mídia ganha o custo já travado no teto e os leads da LP do seu
   // criativo (cruzados por veículo e por dia), para a tabela de criativos
