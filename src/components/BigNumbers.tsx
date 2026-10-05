@@ -44,7 +44,20 @@ interface BigNumbersProps {
    * mostra a bonificação separada, para ninguém somar as duas coisas.
    */
   investimentoBonificado?: number;
+  /** Mostra as impressões por extenso ("28.213") em vez de abreviadas ("28.2 mil") */
+  impressoesCompletas?: boolean;
+  /** Impressões do PI anterior nos mesmos dias de campanha, para comparar */
+  comparativoImpressoes?: {
+    /** Período do PI anterior, ex: "set/2026" */
+    rotulo: string;
+    /** Datas comparadas no PI anterior, ex: "16/09–19/09" */
+    datas: string;
+    impressoes: number;
+  };
 }
+
+const formatInteiro = (num: number): string =>
+  new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(num);
 
 const formatNumber = (num: number): string => {
   if (num >= 1000000) {
@@ -111,7 +124,9 @@ const BigNumbers = ({
   previousPeriodMetrics,
   selectedPI,
   lpMetrics,
-  investimentoBonificado
+  investimentoBonificado,
+  impressoesCompletas = false,
+  comparativoImpressoes
 }: BigNumbersProps) => {
   // Detecta se há filtros ativos
   const hasActiveFilters = () => {
@@ -218,7 +233,7 @@ const BigNumbers = ({
         <p className="text-base sm:text-2xl font-bold text-blue-700 leading-tight">
           <AnimatedNumber
             value={metrics.impressoes}
-            formatter={formatNumber}
+            formatter={impressoesCompletas ? formatInteiro : formatNumber}
             duration={2000}
           />
         </p>
@@ -231,6 +246,19 @@ const BigNumbers = ({
               showComparison={true}
               hidePercentageDiff={impressoesComparison.hidePercentageDiff}
               compactMode={true}
+            />
+          </div>
+        )}
+        {comparativoImpressoes && (
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            <p className="text-xs text-gray-500 mb-1">
+              vs {comparativoImpressoes.rotulo} · mesmo período
+            </p>
+            <LinhaComparativo
+              atual={metrics.impressoes}
+              anterior={comparativoImpressoes.impressoes}
+              rotulo={comparativoImpressoes.datas}
+              formatar={impressoesCompletas ? formatInteiro : formatNumber}
             />
           </div>
         )}
@@ -371,7 +399,6 @@ const BigNumbers = ({
       {/* Landing page: sessões, leads e CPL vindos do GA4 */}
       {lpMetrics && (() => {
         const anterior = lpMetrics.comparativo;
-        const formatInteiro = (n: number) => new Intl.NumberFormat('pt-BR').format(n);
         const temConta =
           !lpMetrics.carregando && lpMetrics.leads > 0 && lpMetrics.investimentoBase !== undefined;
         const valorCPL = lpMetrics.carregando || lpMetrics.leads === 0 ? '—' : formatCurrency(lpMetrics.cpl);

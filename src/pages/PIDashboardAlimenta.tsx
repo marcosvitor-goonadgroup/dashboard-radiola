@@ -9,7 +9,7 @@ import CreativePerformance from '../components/CreativePerformance';
 import ParticlesBackground from '../components/ParticlesBackground';
 import Footer from '../components/Footer';
 import adDeskWhite from '../images/ad-desk-white.svg';
-import { subDays, startOfDay, format } from 'date-fns';
+import { subDays, startOfDay, format, addDays, differenceInCalendarDays } from 'date-fns';
 import { toSlug } from '../utils/slug';
 import { PeriodoGA4 } from '../services/ga4';
 import { useLandingPagePI } from '../hooks/useLandingPagePI';
@@ -146,6 +146,43 @@ const PIDashboardAlimentaContent = ({
     if (piData.length === 0) return new Date();
     return new Date(Math.min(...piData.map(d => d.date.getTime())));
   }, [piData]);
+
+  // Impressões do PI anterior nos mesmos dias de campanha que estão na tela.
+  // Os PIs começam em datas diferentes (1952 no meio de setembro, 1953 no dia 1º),
+  // então o alinhamento é pelo dia de campanha, a partir do primeiro dia com entrega:
+  // os dias 1 a 4 de um contra os dias 1 a 4 do outro.
+  const comparativoImpressoes = useMemo(() => {
+    if (!comparativo) return undefined;
+
+    const primeiroDiaComEntrega = (dados: typeof piData) => {
+      const datas = dados.filter(i => i.impressions > 0).map(i => i.date.getTime());
+      return datas.length > 0 ? startOfDay(new Date(Math.min(...datas))) : null;
+    };
+
+    const inicioAtual = primeiroDiaComEntrega(piData);
+    const inicioAnterior = primeiroDiaComEntrega(lpAnterior.piData);
+    if (!inicioAtual || !inicioAnterior) return undefined;
+
+    // Mesma janela do displayData: últimos 7 dias ou todo o período, até o último dia com dados
+    const janelaInicio =
+      periodFilter === '7days' && sevenDaysAgoFromMaxDate > inicioAtual ? sevenDaysAgoFromMaxDate : inicioAtual;
+    const diaInicial = differenceInCalendarDays(janelaInicio, inicioAtual);
+    const diaFinal = differenceInCalendarDays(maxAvailableDate, inicioAtual);
+
+    const de = addDays(inicioAnterior, diaInicial);
+    const ate = addDays(inicioAnterior, diaFinal);
+
+    const impressoes = lpAnterior.piData
+      .filter(i => i.date >= de && i.date <= ate)
+      .filter(i => !selectedVehicle || i.veiculo === selectedVehicle)
+      .reduce((s, i) => s + i.impressions, 0);
+
+    return {
+      rotulo: comparativo.periodoLP.rotulo,
+      datas: `${format(de, 'dd/MM')}–${format(ate, 'dd/MM')}`,
+      impressoes,
+    };
+  }, [comparativo, piData, lpAnterior.piData, periodFilter, sevenDaysAgoFromMaxDate, maxAvailableDate, selectedVehicle]);
 
   const generalBenchmarks = useMemo(() => {
     const totalImp = data.reduce((s, i) => s + i.impressions, 0);
@@ -357,6 +394,8 @@ const PIDashboardAlimentaContent = ({
                 selectedPI={piSlug}
                 lpMetrics={lpMetrics}
                 investimentoBonificado={investimentoBonificado}
+                impressoesCompletas
+                comparativoImpressoes={comparativoImpressoes}
               />
             </div>
 
