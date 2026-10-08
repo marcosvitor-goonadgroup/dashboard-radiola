@@ -92,7 +92,12 @@ export interface GrupoVeiculo {
   aceitaFonte: (source: string, medium: string) => boolean;
 }
 
-const ehMeta = (source: string) => source === 'meta' || source === 'facebook' || source === 'instagram';
+// "{{campaign.id}}" é parâmetro dinâmico de URL do Meta que não foi preenchido. Chaves
+// duplas são a sintaxe do Meta (Google usa "{campaignid}", TikTok usa "__CAMPAIGN_ID__")
+const ehMacroDoMeta = (source: string) => /^\{\{.+\}\}$/.test(source);
+
+const ehMeta = (source: string) =>
+  source === 'meta' || source === 'facebook' || source === 'instagram' || ehMacroDoMeta(source);
 
 export const GRUPOS_VEICULO: GrupoVeiculo[] = [
   {
@@ -149,13 +154,15 @@ export const metricasDoVeiculoPI = (
 };
 
 /**
- * A mesma campanha aparece no GA4 com variações de utm_campaign: "alimenta" para
- * social/display e "alimenta_2026_search" para os sitelinks da busca. Todas as
- * que começam com o nome base pertencem à campanha.
+ * A aba GA4 traz o tráfego do site inteiro, então a campanha é filtrada aqui pela
+ * coluna "Session campaign". Uma campanha pode ter mais de um utm_campaign: o nome
+ * base e as variações dele ("alimenta_2026_search", dos sitelinks da busca) e
+ * valores avulsos como "{{ad.id}}", de anúncios cujo parâmetro dinâmico não foi
+ * preenchido.
  */
-const ehDaCampanha = (nome: string, base: string): boolean => {
+const ehDaCampanha = (nome: string, campanhas: string[]): boolean => {
   const n = nome.trim().toLowerCase();
-  return n === base || n.startsWith(`${base}_`) || n.startsWith(`${base}-`);
+  return campanhas.some(base => n === base || n.startsWith(`${base}_`) || n.startsWith(`${base}-`));
 };
 
 // Páginas com comparativo leem a aba duas vezes (período atual e anterior): uma requisição basta
@@ -183,14 +190,14 @@ const buscarLinhasGA4 = (): Promise<string[][]> => {
  * `periodo` fecha a leitura numa janela de datas — campanhas que se estendem por
  * mais de um PI usam o mesmo utm_campaign, e é o mês que separa um PI do outro.
  */
-export const fetchGA4Resumo = async (campanhaGA4: string, periodo?: PeriodoGA4): Promise<GA4Resumo> => {
+export const fetchGA4Resumo = async (campanhasGA4: string[], periodo?: PeriodoGA4): Promise<GA4Resumo> => {
   try {
     const todas = await buscarLinhasGA4();
     if (todas.length === 0) return GA4_RESUMO_VAZIO;
 
-    const base = campanhaGA4.trim().toLowerCase();
+    const campanhas = campanhasGA4.map(c => c.trim().toLowerCase());
     const linhas = todas.filter(row => {
-      if (row.length < 6 || !ehDaCampanha(row[2] || '', base)) return false;
+      if (row.length < 6 || !ehDaCampanha(row[2] || '', campanhas)) return false;
       // Datas "yyyy-MM-dd" comparam corretamente como texto
       if (periodo && (row[0] < periodo.inicio || row[0] > periodo.fim)) return false;
       return true;

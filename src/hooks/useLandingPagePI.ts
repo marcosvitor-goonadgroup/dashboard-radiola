@@ -17,7 +17,8 @@ interface Params {
   campaignSlug: string;
   /** null desliga o hook — usado quando a página não tem PI de comparação */
   piSlug: string | null;
-  campanhaGA4: string;
+  /** Valores de "Session campaign" do GA4 que pertencem à campanha */
+  campanhasGA4: string[];
   periodoGA4: PeriodoGA4;
 }
 
@@ -40,7 +41,7 @@ export const useLandingPagePI = ({
   clientSlug,
   campaignSlug,
   piSlug,
-  campanhaGA4,
+  campanhasGA4,
   periodoGA4,
 }: Params): LandingPagePI => {
   const [piInfo, setPiInfo] = useState<PIInfo[] | null>(null);
@@ -48,6 +49,8 @@ export const useLandingPagePI = ({
   const [carregando, setCarregando] = useState(piSlug !== null);
 
   const { inicio, fim } = periodoGA4;
+  // Chave estável para o efeito: a lista pode chegar como array novo a cada render
+  const chaveCampanhas = campanhasGA4.join('|');
 
   useEffect(() => {
     if (piSlug === null) {
@@ -58,7 +61,7 @@ export const useLandingPagePI = ({
     let ativo = true;
     setCarregando(true);
 
-    Promise.all([fetchPIInfo(piSlug), fetchGA4Resumo(campanhaGA4, { inicio, fim })])
+    Promise.all([fetchPIInfo(piSlug), fetchGA4Resumo(chaveCampanhas.split('|'), { inicio, fim })])
       .then(([infoPI, resumoGA4]) => {
         if (!ativo) return;
         setPiInfo(infoPI);
@@ -74,7 +77,7 @@ export const useLandingPagePI = ({
       });
 
     return () => { ativo = false; };
-  }, [piSlug, campanhaGA4, inicio, fim]);
+  }, [piSlug, chaveCampanhas, inicio, fim]);
 
   const piData = useMemo(
     () =>

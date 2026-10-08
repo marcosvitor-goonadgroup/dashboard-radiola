@@ -35,8 +35,11 @@ export interface PIDashboardAlimentaProps {
   clientSlug: string;
   campaignSlug: string;
   piSlug: string;
-  /** Nome base da campanha na aba GA4 (a planilha usa um rótulo curto, ex: "alimenta") */
-  campanhaGA4: string;
+  /**
+   * Valores de "Session campaign" do GA4 que pertencem à campanha. A aba traz o site
+   * inteiro; cada valor também aceita variações ("alimenta" inclui "alimenta_2026_search").
+   */
+  campanhasGA4: string[];
   /**
    * Janela do GA4 que pertence a este PI. A campanha usa o mesmo utm em todos os
    * PIs, então é o mês que separa as sessões e leads de um PI do outro.
@@ -87,7 +90,7 @@ const PIDashboardAlimentaContent = ({
   clientSlug,
   campaignSlug,
   piSlug,
-  campanhaGA4,
+  campanhasGA4,
   periodoLP,
   comparativo,
 }: PIDashboardAlimentaProps) => {
@@ -103,7 +106,7 @@ const PIDashboardAlimentaContent = ({
     clientSlug,
     campaignSlug,
     piSlug,
-    campanhaGA4,
+    campanhasGA4,
     periodoGA4: periodoLP,
   });
 
@@ -113,7 +116,7 @@ const PIDashboardAlimentaContent = ({
     clientSlug,
     campaignSlug,
     piSlug: comparativo?.piSlug ?? null,
-    campanhaGA4,
+    campanhasGA4,
     periodoGA4: comparativo?.periodoLP ?? periodoLP,
   });
 
