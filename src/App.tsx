@@ -444,8 +444,9 @@ const DashboardContent = () => {
 const ALIMENTA_SETEMBRO = { inicio: '2026-09-01', fim: '2026-09-30', rotulo: 'set/2026' };
 const ALIMENTA_OUTUBRO = { inicio: '2026-10-01', fim: '2026-10-31', rotulo: 'out/2026' };
 // Valores de "Session campaign" da Alimenta no GA4 — "{{ad.id}}" vem de anúncios do Meta
-// em que o parâmetro dinâmico do utm_campaign não foi preenchido
-const ALIMENTA_CAMPANHAS_GA4 = ['alimenta', '{{ad.id}}'];
+// em que o parâmetro dinâmico do utm_campaign não foi preenchido. Variações com prefixo
+// ("alimenta_2026_search") entram junto com o nome base.
+const ALIMENTA_CAMPANHAS_GA4 = ['alimenta', 'alimenta_2026', '{{ad.id}}'];
 
 const PIS_COM_DASHBOARD_PROPRIO: Record<string, (p: { clientSlug: string; campaignSlug: string; piSlug: string }) => JSX.Element> = {
   'sebrae/alimenta-2026/1952': props => (

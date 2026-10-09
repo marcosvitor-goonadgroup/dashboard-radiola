@@ -104,6 +104,8 @@ export const GRUPOS_VEICULO: GrupoVeiculo[] = [
     chave: 'meta',
     veiculosMidia: ['facebook', 'instagram'],
     nomesPI: ['fb ig', 'fb/ig', 'meta', 'meta ads', 'facebook', 'instagram'],
+    // Inclui "instagram / influencer" (alimenta_2026): posts de influenciadores impulsionados
+    // pelo Meta, então são mídia paga de Fb Ig
     aceitaFonte: ehMeta,
   },
   {

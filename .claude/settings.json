@@ -9,7 +9,8 @@
       "Bash(node C:/Users/marco/AppData/Local/Temp/claude/c--Users-marco-OneDrive-Desktop-GOON-AdDesk-Radiola/ca7c05fb-c593-40b0-bedd-a17d04fdceb6/scratchpad/probe6.cjs)",
       "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=GA4\" -o ga4v4.json)",
       "Bash(python -I -c ' *)",
-      "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Consolidado\" -o sebrae_v5.json)"
+      "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=Consolidado\" -o sebrae_v5.json)",
+      "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1CBCFY6ND17r34KnwApqlAr5UfARwYqHMtzuCEl5AcU8/data?range=GA4\" -o ga4v5.json)"
     ]
   }
 }
